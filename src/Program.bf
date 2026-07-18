@@ -5,7 +5,7 @@ namespace PFUI;
 
 using static PFUI.UI;
 
-// A factored word: indistinguishable from a framework word at the call site.
+// Factored words: indistinguishable from framework words at the call site.
 static class Words
 {
 	public static void TitleLabel(StringView text)
@@ -56,9 +56,11 @@ class Program
 	public static int Main(String[] args)
 	{
 		if (args.Count > 0 && args[0] == "--test-mismatch")
-			return TestMismatch();
+			return RunApp(scope MismatchApp());
 		if (args.Count > 0 && args[0] == "--test-unbalanced")
-			return TestUnbalanced();
+			return RunApp(scope UnbalancedApp());
+		if (args.Count > 0 && args[0] == "--test-leftover")
+			return RunApp(scope LeftoverApp());
 
 		let app = scope CounterApp();
 
@@ -81,24 +83,15 @@ class Program
 		return 0;
 	}
 
-	// Negative test: closing a container of the wrong kind must fail with a
-	// named-marker error, not build a scrambled tree.
-	static int TestMismatch()
+	static int RunApp(App app)
 	{
-		let app = scope MismatchApp();
-		app.RebuildIfNeeded();
-		return 0;
-	}
-
-	// Negative test: a missing close word must trip the stack-hygiene check.
-	static int TestUnbalanced()
-	{
-		let app = scope UnbalancedApp();
 		app.RebuildIfNeeded();
 		return 0;
 	}
 }
 
+// Negative test: closing a container of the wrong kind must fail with a
+// named-marker error, not build a scrambled tree.
 class MismatchApp : App
 {
 	protected override void Build()
@@ -109,11 +102,25 @@ class MismatchApp : App
 	}
 }
 
+// Negative test: a missing close word must trip the stack-hygiene check.
 class UnbalancedApp : App
 {
 	protected override void Build()
 	{
 		_VStack();
 		Label("no close word follows");
+	}
+}
+
+// Negative test: primitive values nothing consumed must be reported by name
+// when the enclosing container closes.
+class LeftoverApp : App
+{
+	protected override void Build()
+	{
+		VStack(scope () => {
+			PushInt(42); PushFloat(3.14f); PushBool(true);
+			Label("x");
+		});
 	}
 }

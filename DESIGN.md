@@ -28,101 +28,160 @@ VStack(scope () => {
    compose onto whole containers for free: `...); Padding(8);`.
 2. **Hybrid data passing.** The stack form is primitive (`Str("x"); Label();`) and
    convenience overloads are sugar (`Label("x")` ≡ `Str("x"); Label();`). Modifier
-   parameters are always applicative (`TextColor(.Red)`). This kills the need for
-   `dup`/`swap`/`rot` — the part of concatenative style that does not translate pleasantly.
+   parameters are always applicative (`TextColor(.Red)`).
 3. **Delegate blocks are the user-facing container form**, implemented on top of the
-   public paired primitives:
-   ```beef
-   public static void VStack(delegate void() body) { _VStack(); body(); VStack_(); }
-   ```
-   The primitives (`_VStack()`/`VStack_()`) stay public for purist code and for factored
-   words that open in one function and close in another. Beef lambdas capture by value;
-   mutating a local from inside a body needs `scope [&] () => { ... }` (fields via `this`
-   work as-is).
+   public paired primitives (`_VStack()`/`VStack_()`), which remain available for
+   cross-function factoring. (The mixin-block alternative is empirically impossible:
+   Beef evaluates mixin arguments eagerly, before the body.)
 4. **Rebuild-on-invalidate** (Flutter's model minus diffing). `Build()` re-runs only after
-   `Invalidate()`; each run produces a fresh tree in a bump arena (`System.BumpAllocator`);
-   the old tree is freed wholesale by deleting the arena. Layout/draw will run per frame
-   from the retained current tree.
+   `Invalidate()`; each run produces a fresh tree in a `System.BumpAllocator` arena; the
+   old tree is freed wholesale. State is plain Beef fields; reactivity is `Invalidate()`.
+5. **One widget class + component composition** (see Architecture below). Widgets are
+   never subclassed; capabilities are component objects; the single inheritance point is
+   the `Component` base class, one level deep.
 
-### Rejected alternatives (and why)
+## Architecture
 
-- **Cascade operator** (`app.._VStack()`): ties words to an instance; reads as method
-  chaining, not word sequences.
-- **Defer-mixin containers** (`{ VStack!(); ... }` with an injected `defer` closing at
-  block end): the close word is invisible at `}`, so a modifier after the brace is
-  unreadable — you must know the brace secretly ran `HStack_()`.
-- **Mixin with block argument** (`VStack!({ ... })`): *empirically impossible.* Beef
-  evaluates mixin arguments once, eagerly, before the mixin body — a scratch test printed
-  the body before the open marker, nested containers inverted their open order, and
-  `defer:mixin` closes fired bunched at end of `Main`. A mixin argument reference is also
-  only usable as an expression, never a bare statement.
-- **Encoding stack effects in generic types**: Beef has no HList/variadic-generic
-  ergonomics; it would destroy the flat word aesthetic. Runtime checking instead (below).
+### The widget model: sealed class + component bag
 
-## What survives the translation, what doesn't
+`Widget` (Core/Widget.bf) is the only widget class and is `sealed` — the no-subclassing
+rule is compiler-enforced. It carries
+identity (`Name`, `Key`), the one universal layout property (`Padding`), and a bag of
+`Component` objects. Everything else — text styling, clickability, stack axis, children —
+is a component:
 
-**Survives — and is the payoff:**
-- *Point-free factoring.* Any contiguous run of words extracts into a
-  zero-parameter-plumbing function and drops back in anywhere:
-  `static void TitleLabel(StringView s) { Label(s); FontSize(24); }`
-- *Uniform extensibility.* With `using static`, user words are indistinguishable from
-  framework words at the call site.
-- *Implicit dataflow.* Widgets flow through the stack; no builder objects, no variables.
-- *Control flow for free.* Native `for`/`if` around word sequences replaces Factor's
-  `each`/`map`/`if*` combinators — the hybrid beats Factor for approachability here.
+- `Get<T>()` — capability query, null if absent.
+- `Require<T>(word)` — capability query that fails with a named error
+  ("HStack has no TextStyle — FontSize does not apply to it").
+- `Attach(c)` — rejects duplicate component types (a second TextStyle on one widget is
+  almost always a construction word firing at the wrong stack top).
 
-**Doesn't survive (accepted):**
-- *Static stack-effect checking.* Compensated at runtime: type-tagged stack items, every
-  pop validates its tag and reports the failing word plus a stack dump (`PrintStack()` is
-  Factor's `.s`), containers use **named markers** so a mismatched close is an immediate
-  error, and the stack must be empty after every build (the "stack hygiene" assert — the
-  poor-man's stack-effect checker).
-- *Quotations / higher-order words.* Delegates substitute where needed.
-- *Interactive listener development.* Out of scope.
+**Why not widget subclasses, when Factor subclasses its gadgets?** Factor's gadgets are
+*retained, long-lived, stateful actors* — objects that own state and respond to events,
+which is what classes with behavior are for, and subclassing is Factor's dispatch
+mechanism (generic words dispatch on class). PFUI chose rebuild-on-invalidate, so its
+widgets are *transient descriptions*: data records consumed by framework passes. Behavior
+polymorphism still needs a home — it moves one level down, to `Component`:
 
-## Key corrections to the original concept
+- **Inheritance for behavior polymorphism**: component classes override framework hooks
+  (`Describe` today; `Measure`/`Draw` when layout/rendering land). One level deep.
+- **Composition for capability mixing**: widgets are bags. A clickable image is
+  `Image + Clickable`; no `ClickableImage` class can ever exist. Subclass trees handle
+  capability combinations combinatorially; bags handle them trivially.
 
-- **A global thread-safe stack is a mis-port of Factor.** Factor's data stack is per
-  execution context. Locking individual push/pops cannot stop two interleaved word
-  sequences from corrupting the tree — safety must be whole-build-grained. The stack is
-  `[ThreadStatic]`; the prototype is single-UI-thread; parallel per-window builds remain
-  possible later.
-- **The stack is a construction workspace, not a store.** No state lives on it between
-  builds; `EndBuild` enforces emptiness.
-- **Strings are copied into the arena at push time.** `Label(scope $"Count: {n}")` is safe
-  because `Str` copies; callers never transfer ownership.
-- **Handler lifetime.** Delegates passed to `OnClick` are owned by the framework, stored
-  per build, and freed on the next rebuild. Events always dispatch against the current
-  tree, so a handler can never outlive the widgets it references.
+Framework components and user components are **peers**: every pass dispatches through the
+same virtual hooks, so a user's component shows up in the tree dump (and later in layout
+and rendering) with no registration step.
+
+### The word model: everything is an extension of a small core
+
+`Core/UI.bf` holds the stack and the **core-op API** — the only functions words build on,
+public on purpose (it is the documented extender surface):
+
+- Stack: `Push`, `PopStr/PopInt/PopFloat/PopDouble/PopBool/PopWidget(word)`, `Top(word)`.
+- Construction: `NewWidget(name)` (pushes *and* returns), `Attach(component)`,
+  `OpenContainer(name)` / `CloseContainer(name)`.
+- Infrastructure: `RegisterHandler`, `BuildAlloc` (the build arena), `Fail(word, msg)`.
+
+Every word — framework or user — is an `extension UI` block. Beef extensions add static
+methods, access private members, and work **across projects**, so an app can define its
+own words, components, and modifiers without touching the framework. `using static
+PFUI.UI;` exposes them all identically.
+
+### Stack-based construction (the word-author API)
+
+Widget words are written in the framework's own word language:
+
+```beef
+public static void Label()
+{
+    let text = PopStr("Label");   // 1. pop inputs FIRST
+    NewWidget("Label");           // 2. then push the widget
+    Attach(new:BuildAlloc TextStyle() { Text = text });   // 3. then attach/modify
+}
+```
+
+**The pop-inputs-first rule matters**: `NewWidget` pushes on top of any pending inputs, so
+popping after it finds the widget, not the input. This is Factor's own discipline
+(consume inputs before pushing outputs) surfacing in Beef.
+
+Because the widget is on the stack during construction, **widget words can reuse modifier
+words as defaults** — `NewWidget("Button"); …; FontSize(14); TextColor(.White);` — and
+default sets factor into ordinary words. Containers use the same idiom: the closing word
+pushes its container, attaches its layout component, then `CloseContainer(name)` pops it,
+collects children down to the name-matched marker, fills a `Children` component, and
+re-pushes. Stack effect: `( mark child1 … childN container -- container )`.
+
+`NewWidget` returning the widget is the applicative escape hatch: authors who prefer
+`let w = NewWidget("X"); w.Attach(…)` may, with the same function.
+
+### Three tiers of "custom widget" (user side)
+
+1. **Factored word** (the 90% case, zero classes): `static void IconButton(...)` composing
+   existing words. This is Factor-style factoring and the framework's core payoff.
+2. **New capability**: a `Component` subclass + a modifier word that attaches it on
+   demand (see Handlers/OnClick.bf for the pattern) — works on *any* widget, in the
+   user's own project.
+3. **New drawable primitive** (rare): a `Component` subclass overriding the behavior
+   hooks (`Describe` now, `Measure`/`Draw` later) + a word that news the widget and
+   attaches it.
+
+### Primitives
+
+Data words: the `PushStr/PushInt/PushFloat/PushDouble/PushBool` family, mirroring the
+`Pop*` core ops, plus collision-free friendly aliases: `Str(s)` (arena-copies; the
+established content word), `Number(int)`/`Number(float)`/`Number(double)`, and
+`Bool(b)`. Bare `Int(…)` and `Float(…)` words are **impossible in Beef**: `Int` and
+`Float` are corlib struct names and type constructors win resolution over using-static
+methods. Complex objects (structs, lists, dictionaries) are deferred to their own
+planning phase, as is image/asset support (the earlier `Image` widget was removed).
+
+### Diagnostics (the stand-in for Factor's stack-effect checker)
+
+Type-tagged stack items; every pop validates its tag and reports the failing word plus a
+stack dump (`PrintStack()` = Factor's `.s`); containers use **named markers** (mismatched
+close = immediate named error); the stack must be empty after every build; `Attach`
+rejects duplicate component types; `Require<T>` names both the word and the widget.
+
+### Memory & ownership
+
+Everything a build allocates — widgets, components, bags, string copies — goes through
+`new:BuildAlloc` and dies wholesale when the arena is deleted on rebuild. Handlers passed
+to `OnClick` are framework-owned, stored per build, freed on the next rebuild; events only
+ever dispatch against the current tree, so a handler cannot outlive what it references.
 
 ## State management & reactivity
 
-**Now:** state = plain Beef fields; UI = f(state); reactivity = `Invalidate()`. Handlers
-mutate fields, call `Invalidate()`; the driver re-runs `Build()` before the next frame.
-No diffing, no observers, no dirty-tracking below whole-window granularity.
+**Now:** state = plain Beef fields; UI = f(state); reactivity = `Invalidate()`. No
+diffing, no observers.
 
-**Growth path, only when measurably needed:**
-1. Memoized subtrees (`Memo(key)`) reusing the previous build's subtree — requires widget
-   identity.
-2. Factor-style `Model<T>` observables with a `Bind` modifier word — the retained-mode
-   vocabulary; port only if whole-tree rebuild proves too slow.
+**Growth path, only when measurably needed:** memoized subtrees (needs widget identity);
+Factor-style `Model<T>` observables + `Bind` (retained-mode vocabulary; only if
+whole-tree rebuild proves too slow).
 
-**Widget identity is the known hard problem.** Scroll offset, caret, and focus cannot live
-in widgets that are rebuilt. The standard fix is a stable ID (call order + optional
-`Key(id)` for list items) into a persistent side table. The `Key` word exists today so the
-ID slot is designed in from the start; the side table comes with the first stateful widget.
+**Widget identity is the known hard problem.** Scroll offset, caret, focus, and animation
+progress cannot live in rebuilt widgets. Standard fix: stable ID (parent path + call
+order + optional `Key`) into a persistent side table. The `Key` word exists today so the
+slot is designed in; the side table comes with the first stateful widget.
 
 ## Deferred
 
-Real renderer (custom drawing), layout pass (constraints-down/sizes-up: sum on main axis,
-max on cross axis, leftover to `Spacer`s), widget-ID side table, memoization, models,
-text input, focus/hit-testing, animations, accessibility.
+Roadmap planning session (next), then per its phases: real renderer, layout pass
+(constraints-down/sizes-up; sum on main axis, max on cross axis, leftover to `Spacer`s),
+widget-ID side table, hover/press interaction states + declarative style responses,
+memoization, models, text input, focus/hit-testing, drag (an input protocol, not a
+component), animations, accessibility (semantic roles for composed widgets), image/asset
+pipeline, complex-object primitives, core/widgets package split (mechanical later, thanks
+to cross-project extensions).
 
 ## Prototype map
 
-| File | Contents |
+| Path | Contents |
 |---|---|
-| `src/Widget.bf` | `Widget`, `WidgetKind`, `Color`, `StackItem` tagged union, `ClickHandler` |
-| `src/UI.bf` | the word vocabulary, thread-local stack, marker validation, diagnostics |
-| `src/App.bf` | rebuild-on-invalidate driver, arena + handler ownership, tree dump, click simulation |
-| `src/Program.bf` | counter + list demo; `--test-mismatch` / `--test-unbalanced` negative tests |
+| `src/Core/` | `Color`, `Component` (base), `Widget` (the one class), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver), `Primitives` |
+| `src/Components/` | `TextStyle`, `Clickable` (+ `ClickHandler`), `StackLayout` (+ `Axis`) |
+| `src/Widgets/` | words only: `Label`, `Button`, `Stack` (HStack/VStack trios), `Spacer` |
+| `src/Modifiers/` | `Layout` (Padding, Spacing), `Text` (TextColor, FontSize), `Identity` (Key) |
+| `src/Handlers/` | `OnClick` (attach-on-demand Clickable) |
+| `src/Diagnostics/` | `StackDump` (PrintStack), `TreeDump`, `Simulate` (SimulateClick) |
+| `src/Program.bf` | counter + list demo; `--test-mismatch` / `--test-unbalanced` / `--test-leftover` |
