@@ -16,17 +16,38 @@ static class Words
 
 using static PFUI.Words;
 
-// M0 demo: opens a colored SDL3 window; closes on X.
-class M0App : PFUI.SDLApp
+// M1 demo: the counter UI rendered in an SDL3 window (not yet clickable).
+class CounterSDLApp : SDLApp
 {
+	int mCount;
+	List<String> mItems = new .() ~ DeleteContainerAndItems!(_);
+
 	public this()
 	{
 		ClearColor = .(20, 40, 60, 255);
+		mItems.Add(new String("alpha"));
+		mItems.Add(new String("beta"));
+		mItems.Add(new String("gamma"));
 	}
 
 	protected override void Build()
 	{
-		VStack(scope () => {});
+		VStack(scope () => {
+			TitleLabel("Counter");
+
+			Str(scope $"Count: {mCount}"); Label(); TextColor(.Red); FontSize(14);
+
+			HStack(scope () => {
+				Button("+");
+				Spacer();
+				Button("-");
+			}); Spacing(4);
+
+			for (let item in mItems)
+			{
+				Label(item); Key(@item.Index);
+			}
+		}); Padding(8);
 	}
 }
 
@@ -78,7 +99,7 @@ class Program
 		if (args.Count > 0 && args[0] == "--test-counter")
 			return RunCounterConsole();
 
-		let app = scope M0App();
+		let app = scope CounterSDLApp();
 		app.Run();
 		return 0;
 	}

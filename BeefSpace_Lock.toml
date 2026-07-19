@@ -1,6 +1,11 @@
 FileVersion = 1
 
 [Locks.SDL3-Beef.Git]
-URL = "https://github.com/Booklordofthedings/SDL3-Beef"
+URL = "https://github.com/SedulousWorks/SDL3-Beef"
 Tag = ""
-Hash = "d8df10fb1303ebb141e38bf97bc43c49afe1ece2"
+Hash = "14d36c83d95be232ce7c4515f4357c338fe082f7"
+
+[Locks.SDL3_ttf-Beef.Git]
+URL = "https://github.com/SedulousWorks/SDL3_ttf-Beef"
+Tag = ""
+Hash = "d8dcb2e6a1fb4159d81f5a3b9877c1822425e65d"

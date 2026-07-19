@@ -15,6 +15,8 @@ public abstract class App
 	Widget mRoot;
 	bool mDirty = true;
 
+	protected Widget Root => mRoot;
+
 	protected abstract void Build();
 
 	public void Invalidate() { mDirty = true; }

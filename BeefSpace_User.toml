@@ -1,7 +1,7 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Core/SDLApp.bf"]
+RecentFilesList = ["src/Components/TextStyle.bf", "src/Core/SDLApp.bf", "src/Core/Size.bf", "src/Core/Rect.bf", "src/Program.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
@@ -44,12 +44,48 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
+TabLabel = "TextStyle.bf"
+TabWidth = 101.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Components/TextStyle.bf"
+CursorPos = 797
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Size.bf"
+TabWidth = 75.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Core/Size.bf"
+CursorPos = 152
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Rect.bf"
+TabWidth = 77.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Core/Rect.bf"
+CursorPos = 199
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Program.bf"
+TabWidth = 93.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Program.bf"
+CursorPos = 2271
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "SDLApp.bf"
 TabWidth = 86.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/SDLApp.bf"
-CursorPos = 541
+CursorPos = 991
 ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets]]

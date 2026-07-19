@@ -1,4 +1,5 @@
 using System;
+using SDL3_ttf;
 
 namespace PFUI;
 
@@ -13,5 +14,24 @@ public class TextStyle : Component
 		buf.AppendF("\"{}\"", Text);
 		if (FontSize != 12) buf.AppendF(" fontSize={}", FontSize);
 		if (TextColor != .Black) buf.AppendF(" color={}", TextColor);
+	}
+
+	public override Size Measure(Size constraint)
+	{
+		let font = SDLApp.sDefaultFont;
+		if (font == null || Text == null)
+			return .(0, 0);
+
+		let cStr = Text.CStr();
+		int32 w = 0, h = 0;
+		TTF_GetStringSize(font, cStr, 0, &w, &h);
+		return .((float)w, (float)h);
+	}
+
+	public override void Draw(Painter painter, Rect bounds)
+	{
+		if (Text == null)
+			return;
+		painter.DrawText(Text, bounds.X, bounds.Y, TextColor);
 	}
 }

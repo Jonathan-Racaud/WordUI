@@ -12,6 +12,7 @@ public sealed class Widget
 	public StringView Name;   // word-provided literal, e.g. "Label"; used by errors and dump
 	public int Key = -1;
 	public float Padding;
+	public Rect mRect;        // assigned by the layout pass; transient (freed with arena)
 
 	List<Component> mComponents;
 
