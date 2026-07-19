@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Diagnostics;
 
 namespace PFUI;
 
@@ -16,7 +17,7 @@ static class Words
 
 using static PFUI.Words;
 
-// M1 demo: the counter UI rendered in an SDL3 window (not yet clickable).
+// M2 demo: the counter UI is now clickable via real SDL mouse events.
 class CounterSDLApp : SDLApp
 {
 	int mCount;
@@ -32,52 +33,31 @@ class CounterSDLApp : SDLApp
 
 	protected override void Build()
 	{
+		Console.WriteLine("Building the Counter App");
 		VStack(scope () => {
 			TitleLabel("Counter");
 
 			Str(scope $"Count: {mCount}"); Label(); TextColor(.Red); FontSize(14);
 
 			HStack(scope () => {
-				Button("+");
+				Button("+"); {
+					OnClick(new () => {
+						Console.WriteLine("Increment button clicked");
+						mCount++;
+						Invalidate();
+					});
+					Debug.WriteLine("Attached onclick to + button");
+					TextColor(.White);
+				}
 				Spacer();
-				Button("-");
+				Button("-"); {
+					OnClick(new () => { mCount--; Invalidate(); });
+					TextColor(.White);
+				}
 			}); Spacing(4);
 
-			for (let item in mItems)
-			{
-				Label(item); Key(@item.Index);
-			}
-		}); Padding(8);
-	}
-}
+			Spacer();
 
-class CounterApp : App
-{
-	int mCount;
-	List<String> mItems = new .() ~ DeleteContainerAndItems!(_);
-
-	public this()
-	{
-		mItems.Add(new String("alpha"));
-		mItems.Add(new String("beta"));
-		mItems.Add(new String("gamma"));
-	}
-
-	protected override void Build()
-	{
-		VStack(scope () => {
-			TitleLabel("Counter");
-
-			// Primitive stack form: a word leaves content for the next word.
-			Str(scope $"Count: {mCount}"); Label(); TextColor(.Red); FontSize(14);
-
-			HStack(scope () => {
-				Button("+"); OnClick(new () => { mCount++; Invalidate(); });
-				Spacer();
-				Button("-"); OnClick(new () => { mCount--; Invalidate(); });
-			}); Spacing(4);
-
-			// Native control flow replaces Factor's each/map combinators.
 			for (let item in mItems)
 			{
 				Label(item); Key(@item.Index);
@@ -96,8 +76,6 @@ class Program
 			return RunApp(scope UnbalancedApp());
 		if (args.Count > 0 && args[0] == "--test-leftover")
 			return RunApp(scope LeftoverApp());
-		if (args.Count > 0 && args[0] == "--test-counter")
-			return RunCounterConsole();
 
 		let app = scope CounterSDLApp();
 		app.Run();
@@ -107,29 +85,6 @@ class Program
 	static int RunApp(App app)
 	{
 		app.RebuildIfNeeded();
-		return 0;
-	}
-
-	static int RunCounterConsole()
-	{
-		let app = scope CounterApp();
-
-		Console.WriteLine("=== initial build ===");
-		app.RebuildIfNeeded();
-		app.DumpTree();
-
-		Console.WriteLine("\n=== click \"+\" twice, click \"-\" once ===");
-		app.SimulateClick("+");
-		app.RebuildIfNeeded();   // handler called Invalidate -> tree rebuilt
-		app.SimulateClick("+");
-		app.RebuildIfNeeded();
-		app.SimulateClick("-");
-		app.RebuildIfNeeded();
-		app.DumpTree();
-
-		Console.WriteLine("\n=== no state change -> no rebuild ===");
-		Console.WriteLine("rebuilt: {}", app.RebuildIfNeeded());
-
 		return 0;
 	}
 }

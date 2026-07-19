@@ -10,6 +10,6 @@ public class Clickable : Component
 
 	public override void Describe(String buf)
 	{
-		buf.Append("clickable");
+		buf.Append(" Clickable");
 	}
 }

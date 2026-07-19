@@ -1,14 +1,14 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Components/TextStyle.bf", "src/Core/SDLApp.bf", "src/Core/Size.bf", "src/Core/Rect.bf", "src/Program.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Diagnostics/TreeDump.bf", "src/Components/TextStyle.bf", "src/Widgets/Label.bf", "src/Components/Clickable.bf", "src/Components/StackLayout.bf", "src/Widgets/Spacer.bf", "src/Core/App.bf", "src/Core/PressTracker.bf", "src/Core/SDLApp.bf", "src/Core/HitTest.bf", "src/Program.bf", "src/Core/Size.bf", "src/Core/Rect.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
 Y = 0
 Width = 2560
 Height = 1366
-ShowKind = "ShowNormal"
+ShowKind = "ShowMaximized"
 
 [MainDockingFrame]
 Type = "DockingFrame"
@@ -43,18 +43,80 @@ DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Clickable.bf"
+TabWidth = 103.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Components/Clickable.bf"
+CursorPos = 136
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "StackLayout.bf"
+TabWidth = 120.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Components/StackLayout.bf"
+CursorPos = 207
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Spacer.bf"
+TabWidth = 91.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Widgets/Spacer.bf"
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
+TabLabel = "TreeDump.bf"
+TabWidth = 111.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Diagnostics/TreeDump.bf"
+CursorPos = 1239
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "App.bf"
+TabWidth = 75.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Core/App.bf"
+CursorPos = 994
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "PressTracker.bf"
+TabWidth = 125.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Core/PressTracker.bf"
+CursorPos = 610
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "HitTest.bf"
+TabWidth = 82.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Core/HitTest.bf"
+CursorPos = 1066
+ProjectName = "PFUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "TextStyle.bf"
-TabWidth = 101.0
+TabWidth = 91.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Components/TextStyle.bf"
-CursorPos = 797
+CursorPos = 253
 ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Size.bf"
-TabWidth = 75.0
+TabWidth = 65.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Size.bf"
@@ -63,7 +125,7 @@ ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Rect.bf"
-TabWidth = 77.0
+TabWidth = 67.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Rect.bf"
@@ -76,7 +138,8 @@ TabWidth = 93.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Program.bf"
-CursorPos = 2271
+CursorPos = 1020
+VertPos = 146.25
 ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
@@ -85,7 +148,8 @@ TabWidth = 86.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/SDLApp.bf"
-CursorPos = 991
+CursorPos = 2013
+VertPos = 720.0
 ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets]]

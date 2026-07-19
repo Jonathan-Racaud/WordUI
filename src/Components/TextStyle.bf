@@ -11,9 +11,9 @@ public class TextStyle : Component
 
 	public override void Describe(String buf)
 	{
-		buf.AppendF("\"{}\"", Text);
-		if (FontSize != 12) buf.AppendF(" fontSize={}", FontSize);
-		if (TextColor != .Black) buf.AppendF(" color={}", TextColor);
+		buf.Append(scope $" Text=\"{Text}\"");
+		buf.Append(scope $" FontSize={FontSize}");
+		buf.Append(scope $" Color={TextColor}");
 	}
 
 	public override Size Measure(Size constraint)

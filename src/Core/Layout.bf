@@ -106,18 +106,62 @@ static class Layout
 		}
 	}
 
-	// Measure a widget's intrinsic size by asking each component.
+	// Measure a widget's intrinsic size. For containers with StackLayout,
+	// measures children and computes the total; for leaves, asks components.
 	static Size MeasureWidget(Widget widget, Size constraint)
 	{
-		float w = 0, h = 0;
+		let children = widget.Get<Children>();
+		let stack = widget.Get<StackLayout>();
+
+		// Container: measure children and compute flex total
+		if (children != null && stack != null)
+		{
+			float pad = widget.Padding;
+			bool isVertical = stack.Axis == .Vertical;
+
+			float totalMain = 0;
+			float maxCross = 0;
+			int spacerCount = 0;
+
+			for (let child in children.Items)
+			{
+				if (child.Name == "Spacer")
+				{
+					spacerCount++;
+					continue;
+				}
+
+				Size childConstraint = isVertical
+					? .(constraint.Width - 2 * pad, float.MaxValue)
+					: .(float.MaxValue, constraint.Height - 2 * pad);
+
+				let size = MeasureWidget(child, childConstraint);
+				totalMain += isVertical ? size.Height : size.Width;
+				maxCross = Math.Max(maxCross, isVertical ? size.Width : size.Height);
+			}
+
+			// Spacing between non-spacer items
+			int nonSpacerCount = children.Items.Count - spacerCount;
+			if (nonSpacerCount > 1)
+				totalMain += stack.Spacing * (nonSpacerCount - 1);
+
+			float w = isVertical ? maxCross : totalMain;
+			float h = isVertical ? totalMain : maxCross;
+			w += pad * 2;
+			h += pad * 2;
+			return .(w, h);
+		}
+
+		// Leaf: ask components
+		float cw = 0, ch = 0;
 		for (let c in widget.Components)
 		{
 			let size = c.Measure(constraint);
-			w = Math.Max(w, size.Width);
-			h = Math.Max(h, size.Height);
+			cw = Math.Max(cw, size.Width);
+			ch = Math.Max(ch, size.Height);
 		}
-		w += widget.Padding * 2;
-		h += widget.Padding * 2;
-		return .(w, h);
+		cw += widget.Padding * 2;
+		ch += widget.Padding * 2;
+		return .(cw, ch);
 	}
 }

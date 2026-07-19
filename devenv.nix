@@ -8,7 +8,8 @@
   ];
 
   scripts = {
-    ide.exec = "BeefIDE";
+    ide.exec = "BeefIDE &";
+    build.exec = "BeefBuild";
     run.exec = ''
       BUILD_DIR=build/Debug_Linux64/PFUI
       
@@ -18,5 +19,6 @@
       
       ./$BUILD_DIR/PFUI
     '';
+    brun.exec = "build && run";
   };
 }

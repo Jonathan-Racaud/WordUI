@@ -9,51 +9,59 @@ extension App
 {
 	public void DumpTree()
 	{
+		Console.WriteLine("# ---- [UI Tree Dump] ---- #");
 		if (mRoot == null)
 		{
 			Console.WriteLine("(no tree — call RebuildIfNeeded first)");
 			return;
 		}
 		Dump(mRoot, 0);
+		Console.WriteLine("# ---- [/UI Tree Dump] ---- #");
 	}
 
 	static void Dump(Widget w, int depth)
 	{
 		let line = scope String();
 		line.Append(' ', depth * 2);
-		line.Append(w.Name);
+		line.Append(scope $"<{w.Name}");
 
 		let props = scope String();
 		for (let c in w.Components)
 		{
 			let d = scope String();
 			c.Describe(d);
+
 			if (!d.IsEmpty)
 			{
 				if (!props.IsEmpty) props.Append(' ');
 				props.Append(d);
 			}
 		}
-		if (w.Padding != 0)
-		{
-			if (!props.IsEmpty) props.Append(' ');
-			props.AppendF("padding={}", w.Padding);
-		}
-		if (w.Key != -1)
-		{
-			if (!props.IsEmpty) props.Append(' ');
-			props.AppendF("key={}", w.Key);
-		}
-		if (!props.IsEmpty)
-			line.AppendF(" ({})", props);
 
-		Console.WriteLine(line);
+		if (!props.IsEmpty) props.Append(' ');
+		props.AppendF(" Padding={}", w.Padding);
+
+		if (!props.IsEmpty) props.Append(' ');
+		props.AppendF(scope $" Key={w.Key}");
+
+		if (!props.IsEmpty) props.Append(' ');
+		props.Append(scope $" Rect=({w.mRect.X},{w.mRect.Y}, {w.mRect.Width}x{w.mRect.Height})");
+
+		if (!props.IsEmpty)
+			line.Append(scope $"{props}");
 
 		let kids = w.Get<Children>();
 		if (kids != null)
 		{
+			Console.WriteLine(scope $"{line}>");
+
 			for (let child in kids.Items)
 				Dump(child, depth + 1);
+
+			Console.Write(scope String(' ', depth * 2));
+			Console.WriteLine(scope $"</{w.Name}>");
+		} else {
+			Console.WriteLine(scope $"{line}/>");
 		}
 	}
 }

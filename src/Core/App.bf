@@ -6,8 +6,8 @@ namespace PFUI;
 // Rebuild-on-invalidate driver: `Build()` re-runs only after `Invalidate()`,
 // producing a fresh widget tree in a bump arena; the previous tree (widgets,
 // components, string copies) is freed wholesale by deleting the arena.
-// Non-core conveniences (DumpTree, SimulateClick) live in Diagnostics/ as
-// extensions of this class.
+// Non-core conveniences (e.g. DumpTree) live in Diagnostics/ as extensions
+// of this class.
 public abstract class App
 {
 	BumpAllocator mArena ~ delete _;

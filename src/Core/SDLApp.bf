@@ -86,6 +86,7 @@ public abstract class SDLApp : App
 	{
 		RebuildIfNeeded();
 		Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
+		DumpTree();
 
 		bool quit = false;
 		SDL_Event event = .();
@@ -101,6 +102,18 @@ public abstract class SDLApp : App
 					mWidth = (int32)event.window.data1;
 					mHeight = (int32)event.window.data2;
 					Invalidate();
+				case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+					if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+					{
+							InputEvent input = .() { Type = .MouseDown, X = event.button.x, Y = event.button.y };
+						PressTracker.HandleEvent(Root, input);
+					}
+				case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+					if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+					{
+							InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
+						PressTracker.HandleEvent(Root, input);
+					}
 				default:
 				}
 			}

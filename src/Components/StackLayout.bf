@@ -15,6 +15,6 @@ public class StackLayout : Component
 
 	public override void Describe(String buf)
 	{
-		if (Spacing != 0) buf.AppendF("spacing={}", Spacing);
+		buf.Append(scope $" Axis={Axis} Spacing={Spacing}");
 	}
 }
