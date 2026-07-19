@@ -193,9 +193,9 @@ core/widgets split (mechanical later, thanks to cross-project extensions).
 | Path | Contents |
 |---|---|
 | `src/Core/` | `Color`, `Component` (base), `Widget` (the one class), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver), `Primitives` |
-| `src/Components/` | `TextStyle`, `Clickable` (+ `ClickHandler`), `StackLayout` (+ `Axis`) |
+| `src/Components/` | `TextStyle`, `Clickable` (+ `ClickHandler`), `StackLayout` (+ `Axis`), `LayoutHint` (+ `CrossAlignment`) |
 | `src/Widgets/` | words only: `Label`, `Button`, `Stack` (HStack/VStack trios), `Spacer` |
-| `src/Modifiers/` | `Layout` (Padding, Spacing), `Text` (TextColor, FontSize), `Identity` (Key) |
+| `src/Modifiers/` | `Layout` (Padding, Spacing), `Text` (TextColor, FontSize), `Identity` (Key), `Alignment` (Center, AlignStart, AlignEnd, AlignStretch) |
 | `src/Handlers/` | `OnClick` (attach-on-demand Clickable) |
 | `src/Diagnostics/` | `StackDump` (PrintStack), `TreeDump`, `Simulate` (SimulateClick) |
 | `src/Program.bf` | counter + list demo; `--test-mismatch` / `--test-unbalanced` / `--test-leftover` |

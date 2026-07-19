@@ -38,7 +38,8 @@ static class Layout
 		// Count spacers and measure non-spacer children
 		int spacerCount = 0;
 		int itemCount = children.Items.Count;
-		float[] sizes = scope float[itemCount];
+		float[] mainSizes = scope float[itemCount];
+		float[] crossSizes = scope float[itemCount];
 
 		float totalMain = 0;
 		float maxCross = 0;
@@ -49,7 +50,7 @@ static class Layout
 			if (child.Name == "Spacer")
 			{
 				spacerCount++;
-				sizes[i] = -1; // marker
+				mainSizes[i] = -1; // marker
 				continue;
 			}
 
@@ -60,7 +61,8 @@ static class Layout
 			let size = MeasureWidget(child, constraint);
 			float main = isVertical ? size.Height : size.Width;
 			float cross = isVertical ? size.Width : size.Height;
-			sizes[i] = main;
+			mainSizes[i] = main;
+			crossSizes[i] = cross;
 			totalMain += main;
 			maxCross = Math.Max(maxCross, cross);
 		}
@@ -93,12 +95,33 @@ static class Layout
 				continue;
 			}
 
-			float childMain = sizes[i];
-			float childCross = isVertical ? inner.Width : inner.Height;
+			float childMain = mainSizes[i];
+			float childCrossAvailable = isVertical ? inner.Width : inner.Height;
+			float childCrossSize = crossSizes[i];
+
+			// Apply cross-axis alignment from LayoutHint (default: Stretch)
+			float childCrossPos;
+			float childCrossUsed;
+			var hint = child.Get<LayoutHint>();
+			if (hint != null && hint.CrossAlign != .Stretch)
+			{
+				childCrossUsed = childCrossSize;
+				if (hint.CrossAlign == .Center)
+					childCrossPos = (isVertical ? inner.X : inner.Y) + (childCrossAvailable - childCrossSize) / 2;
+				else if (hint.CrossAlign == .End)
+					childCrossPos = (isVertical ? inner.X : inner.Y) + childCrossAvailable - childCrossSize;
+				else // .Start
+					childCrossPos = isVertical ? inner.X : inner.Y;
+			}
+			else
+			{
+				childCrossPos = isVertical ? inner.X : inner.Y;
+				childCrossUsed = childCrossAvailable;
+			}
 
 			Rect childRect = isVertical
-				? Rect(inner.X, mainPos, childCross, childMain)
-				: Rect(mainPos, inner.Y, childMain, childCross);
+				? Rect(childCrossPos, mainPos, childCrossUsed, childMain)
+				: Rect(mainPos, childCrossPos, childMain, childCrossUsed);
 
 			LayoutWidget(childRect, child); // recurse
 

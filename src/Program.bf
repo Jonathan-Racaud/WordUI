@@ -35,9 +35,9 @@ class CounterSDLApp : SDLApp
 	{
 		Console.WriteLine("Building the Counter App");
 		VStack(scope () => {
-			TitleLabel("Counter");
+			TitleLabel("Counter"); Center();
 
-			Str(scope $"Count: {mCount}"); Label(); TextColor(.Red); FontSize(14);
+			Str(scope $"Count: {mCount}"); Label(); TextColor(.Red); FontSize(14); AlignStart();
 
 			HStack(scope () => {
 				Button("+"); {
@@ -55,7 +55,7 @@ class CounterSDLApp : SDLApp
 
 			for (let item in mItems)
 			{
-				Label(item); Key(@item.Index); TextColor(.(200, 200, 200, 255));
+				Label(item); Key(@item.Index); TextColor(.(200, 200, 200, 255)); AlignStart();
 			}
 		}); Padding(16);
 	}
