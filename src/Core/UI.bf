@@ -109,6 +109,32 @@ public static class UI
 		FailPopped(word, "a widget");
 	}
 
+	public static Component PopPen(StringView word)
+	{
+		if (Pop(word) case .Pen(let c))
+			return c;
+		FailPopped(word, "a pen component");
+	}
+
+	// The pen property modifiers act on; errors name the word that misfired.
+	public static Component TopPen(StringView word)
+	{
+		if (Stack.IsEmpty)
+			Fail(word, "stack is empty — pen modifiers must be inside a Background/Border block");
+		if (Stack.Back case .Pen(let c))
+			return c;
+		let s = scope String();
+		Stack.Back.ToString(s);
+		Fail(word, scope $"stack top is {s}, not a pen — pen modifiers must be inside a Background/Border block");
+	}
+
+	// Attaches a component to the stack-top widget, replacing any existing
+	// component of a compatible type (used by Interior_/Border_ etc.).
+	public static void ReplaceComponent(Component c)
+	{
+		Top("ReplaceComponent").ReplaceComponent(c);
+	}
+
 	// The widget modifiers act on; errors name the word that misfired.
 	public static Widget Top(StringView word)
 	{
@@ -136,6 +162,43 @@ public static class UI
 	public static void Attach(Component c)
 	{
 		Top("Attach").Attach(c);
+	}
+
+	// ---- Pens (scoped block primitives, like containers) ----
+
+	// Pushes a pen component onto the stack. Used by _Interior / _Border.
+	public static void PushPen(Component pen)
+	{
+		Stack.Add(.Pen(pen));
+	}
+
+	// Pops the pen, finds and removes the matching marker, then returns the
+	// pen. The caller attaches it to the stack-top widget.
+	// Stack effect: ( ... marker widget pen -- ... widget )
+	public static Component ClosePen(StringView name)
+	{
+		let pen = PopPen(name);
+
+		int markerIdx = -1;
+		StringView openName = default;
+		for (int i = Stack.Count - 1; i >= 0; i--)
+		{
+			if (Stack[i] case .Mark(let n))
+			{
+				if (n == name)
+				{
+					markerIdx = i;
+					openName = n;
+					break;
+				}
+			}
+		}
+
+		if (markerIdx == -1)
+			Fail(name, scope $"no matching open marker for {name}");
+		Stack.RemoveAt(markerIdx);
+
+		return pen;
 	}
 
 	// ---- Containers ----

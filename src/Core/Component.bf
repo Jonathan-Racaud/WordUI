@@ -20,9 +20,20 @@ public abstract class Component
 		return .(0, 0);
 	}
 
-	// Custom drawing for the render pass. Called after layout has assigned
-	// bounds to every widget. Default: no-op.
-	public virtual void Draw(Painter painter, Rect bounds)
+	// ---- Render pipeline hooks (called in fixed z-order by DrawWidget) ----
+
+	// Fills behind content and children. Default: no-op.
+	public virtual void DrawBackground(Painter painter, Widget widget, Rect bounds)
+	{
+	}
+
+	// Draws the widget's own content (text, custom shapes). Default: no-op.
+	public virtual void DrawContent(Painter painter, Widget widget, Rect bounds)
+	{
+	}
+
+	// Strokes on top of content and children. Default: no-op.
+	public virtual void DrawOverlay(Painter painter, Widget widget, Rect bounds)
 	{
 	}
 }

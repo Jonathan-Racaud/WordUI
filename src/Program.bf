@@ -41,18 +41,13 @@ class CounterSDLApp : SDLApp
 
 			HStack(scope () => {
 				Button("+"); {
-					OnClick(new () => {
-						Console.WriteLine("Increment button clicked");
-						mCount++;
-						Invalidate();
-					});
-					Debug.WriteLine("Attached onclick to + button");
 					TextColor(.White);
+					OnClick(new () => { mCount++; Invalidate(); });
 				}
 				Spacer();
 				Button("-"); {
-					OnClick(new () => { mCount--; Invalidate(); });
 					TextColor(.White);
+					OnClick(new () => { mCount--; Invalidate(); });
 				}
 			}); Spacing(4);
 
@@ -60,9 +55,9 @@ class CounterSDLApp : SDLApp
 
 			for (let item in mItems)
 			{
-				Label(item); Key(@item.Index);
+				Label(item); Key(@item.Index); TextColor(.(200, 200, 200, 255));
 			}
-		}); Padding(8);
+		}); Padding(16);
 	}
 }
 
@@ -74,6 +69,8 @@ class Program
 			return RunApp(scope MismatchApp());
 		if (args.Count > 0 && args[0] == "--test-unbalanced")
 			return RunApp(scope UnbalancedApp());
+		if (args.Count > 0 && args[0] == "--test-unclosed-pen")
+			return RunApp(scope UnclosedPenApp());
 		if (args.Count > 0 && args[0] == "--test-leftover")
 			return RunApp(scope LeftoverApp());
 
@@ -108,6 +105,21 @@ class UnbalancedApp : App
 	{
 		_VStack();
 		Label("no close word follows");
+	}
+}
+
+// Negative test: a pen block opened but not closed must leave a marker and
+// pen on the stack, which triggers a hygiene error when the outer container
+// closes.
+class UnclosedPenApp : App
+{
+	protected override void Build()
+	{
+		VStack(scope () => {
+			_Interior(); Fill(.Red);
+			// missing Interior_()
+			Label("x");
+		});
 	}
 }
 

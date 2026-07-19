@@ -30,12 +30,26 @@ public class Painter
 		SDL_RenderFillRect(mRenderer, &r);
 	}
 
+	// Fill a rounded rectangle. TODO: use SDL_RenderFillRoundedRect when the
+	// Beef SDL3 bindings expose it.
+	public void FillRoundRect(Rect rect, float radius, Color color)
+	{
+		FillRect(rect, color);
+	}
+
 	// Stroke a rectangle outline with a solid color.
 	public void DrawRect(Rect rect, Color color)
 	{
 		SDL_SetRenderDrawColor(mRenderer, color.R, color.G, color.B, color.A);
 		SDL_FRect r = .() { x = rect.X, y = rect.Y, w = rect.Width, h = rect.Height };
 		SDL_RenderRect(mRenderer, &r);
+	}
+
+	// Stroke a rounded rectangle outline. TODO: use SDL_RenderRoundedRect when
+	// the Beef SDL3 bindings expose it.
+	public void DrawRoundRect(Rect rect, float radius, float width, Color color)
+	{
+		DrawRect(rect, color);
 	}
 
 	// Render text at a position with the given color.

@@ -12,6 +12,7 @@ public enum StackItem
 	case Double(double);
 	case Bool(bool);
 	case Elem(Widget);
+	case Pen(Component);
 	case Mark(StringView);
 
 	public void ToString(String buf)
@@ -24,6 +25,7 @@ public enum StackItem
 		case .Double(let v): buf.AppendF("Double({})", v);
 		case .Bool(let v): buf.AppendF("Bool({})", v);
 		case .Elem(let w): buf.AppendF("Widget({})", w.Name);
+		case .Pen(let c):  buf.AppendF("Pen({})", c.GetType().GetName(.. scope .()));
 		case .Mark(let name): buf.AppendF("Marker({})", name);
 		}
 	}

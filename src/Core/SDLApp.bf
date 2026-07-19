@@ -70,15 +70,26 @@ public abstract class SDLApp : App
 	{
 		if (w == null)
 			return;
-		for (let c in w.Components)
-			c.Draw(mPainter, w.mRect);
 
+		// 1. Background — fills behind everything (Interior)
+		for (let c in w.Components)
+			c.DrawBackground(mPainter, w, w.mRect);
+
+		// 2. Content — widget's own content (TextStyle, custom drawing)
+		for (let c in w.Components)
+			c.DrawContent(mPainter, w, w.mRect);
+
+		// 3. Children — recurse
 		let children = w.Get<Children>();
 		if (children != null)
 		{
 			for (let child in children.Items)
 				DrawWidget(child);
 		}
+
+		// 4. Overlay — strokes on top of content and children (Boundary)
+		for (let c in w.Components)
+			c.DrawOverlay(mPainter, w, w.mRect);
 	}
 
 	// Enter the event loop. Returns when the window is closed.

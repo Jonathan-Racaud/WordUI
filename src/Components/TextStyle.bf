@@ -28,7 +28,7 @@ public class TextStyle : Component
 		return .((float)w, (float)h);
 	}
 
-	public override void Draw(Painter painter, Rect bounds)
+	public override void DrawContent(Painter painter, Widget widget, Rect bounds)
 	{
 		if (Text == null)
 			return;

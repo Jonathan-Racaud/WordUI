@@ -44,6 +44,21 @@ public sealed class Widget
 		return t;
 	}
 
+	// Removes any existing component assignable from the same abstract family
+	// (e.g. a new Interior replaces an old Interior regardless of subtype),
+	// then attaches the new one. Used by focusing words like Background().
+	public void ReplaceComponent(Component c)
+	{
+		Type newType = c.GetType();
+		for (int i = mComponents.Count - 1; i >= 0; i--)
+		{
+			let existing = mComponents[i];
+			if (existing.GetType().IsSubtypeOf(newType) || newType.IsSubtypeOf(existing.GetType()))
+				mComponents.RemoveAt(i);
+		}
+		mComponents.Add(c);
+	}
+
 	// Duplicate component types are rejected: attaching a second TextStyle is
 	// almost always a construction word firing at the wrong stack top.
 	public void Attach(Component c)
