@@ -16,7 +16,7 @@ extension UI
 		NewWidget("Button");
 		Attach(new:BuildAlloc TextStyle() { Text = text });
 		Background(scope () => { Fill(.(80, 80, 80, 255)); Radius(4); });
-		Border(scope () => { Stroke(.(120, 120, 120, 255)); Width(1); Radius(4); });
+		Border(scope () => { Stroke(.(120, 120, 120, 255)); StrokeWidth(1); Radius(4); });
 		Padding(8);
 	}
 

@@ -43,15 +43,15 @@ class CounterSDLApp : SDLApp
 				Button("+"); {
 					TextColor(.White);
 					OnClick(new () => { mCount++; Invalidate(); });
-				}
+				} FixedSize(120, 20); Center();
+
 				Spacer();
+
 				Button("-"); {
 					TextColor(.White);
 					OnClick(new () => { mCount--; Invalidate(); });
-				}
+				} FixedSize(120, 40);
 			}); Spacing(4);
-
-			Spacer();
 
 			for (let item in mItems)
 			{

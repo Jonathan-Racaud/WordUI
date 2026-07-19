@@ -92,12 +92,12 @@ extension UI
 		}
 	}
 
-	public static void Width(float w)
+	public static void StrokeWidth(float w)
 	{
-		let pen = TopPen("Width");
+		let pen = TopPen("StrokeWidth");
 		let b = pen as Boundary;
 		if (b == null)
-			Fail("Width", "no active Border — are you inside a Border block?");
-		b.Width = w;
+			Fail("StrokeWidth", "no active Border — are you inside a Border block?");
+		b.StrokeWidth = w;
 	}
 }

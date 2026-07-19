@@ -99,10 +99,16 @@ static class Layout
 			float childCrossAvailable = isVertical ? inner.Width : inner.Height;
 			float childCrossSize = crossSizes[i];
 
-			// Apply cross-axis alignment from LayoutHint (default: Stretch)
+			// Apply cross-axis alignment from LayoutHint (default: Stretch).
+			// A sizing constraint on the cross axis overrides Stretch so that
+			// e.g. Height(.Fixed(20)) inside an HStack produces a 20px-tall
+			// child instead of forcing it to fill the row height.
 			float childCrossPos;
 			float childCrossUsed;
 			var hint = child.Get<LayoutHint>();
+			bool hasCrossConstraint = hint != null &&
+				(isVertical ? !(hint.Width case .Unconstrained) : !(hint.Height case .Unconstrained));
+
 			if (hint != null && hint.CrossAlign != .Stretch)
 			{
 				childCrossUsed = childCrossSize;
@@ -112,6 +118,12 @@ static class Layout
 					childCrossPos = (isVertical ? inner.X : inner.Y) + childCrossAvailable - childCrossSize;
 				else // .Start
 					childCrossPos = isVertical ? inner.X : inner.Y;
+			}
+			else if (hasCrossConstraint)
+			{
+				// Sizing constraint overrides Stretch; position at start
+				childCrossUsed = childCrossSize;
+				childCrossPos = isVertical ? inner.X : inner.Y;
 			}
 			else
 			{
@@ -172,6 +184,12 @@ static class Layout
 			float h = isVertical ? totalMain : maxCross;
 			w += pad * 2;
 			h += pad * 2;
+			var hint = widget.Get<LayoutHint>();
+			if (hint != null)
+			{
+				w = hint.Width.Apply(w, constraint.Width);
+				h = hint.Height.Apply(h, constraint.Height);
+			}
 			return .(w, h);
 		}
 
@@ -185,6 +203,12 @@ static class Layout
 		}
 		cw += widget.Padding * 2;
 		ch += widget.Padding * 2;
+		var hint = widget.Get<LayoutHint>();
+		if (hint != null)
+		{
+			cw = hint.Width.Apply(cw, constraint.Width);
+			ch = hint.Height.Apply(ch, constraint.Height);
+		}
 		return .(cw, ch);
 	}
 }
