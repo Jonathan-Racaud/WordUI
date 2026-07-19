@@ -15,12 +15,12 @@ DESIGN.md                  # Architecture, locked decisions, and rationale
 README.md                  # Quick-start, build instructions, status
 plans/                     # Per-session planning docs and brainstorming notes
 src/
-├── Core/                  # Foundation types: Widget, App, UI (stack + ops), Component, Color, Children, StackItem, Primitives
+├── Core/                  # Foundation types: Widget, App, UI (stack + ops), Component, Color, Children, StackItem, Primitives, Rect, Size, Layout, Painter, HitTest, PressTracker, InputEvent, SDLApp
 ├── Components/            # Capability types: Clickable, StackLayout, TextStyle
 ├── Widgets/               # Word definitions: Label, Button, Stack (HStack/VStack), Spacer
 ├── Modifiers/             # Modifier words: Layout (Padding/Spacing), Text (TextColor/FontSize), Identity (Key)
 ├── Handlers/              # Event words: OnClick
-├── Diagnostics/           # Diagnostics words: StackDump, TreeDump, Simulate
+├── Diagnostics/           # Diagnostics words: StackDump, TreeDump
 └── Program.bf             # Entry point, demo apps, and negative test harnesses
 ```
 
@@ -31,7 +31,7 @@ src/
 ## Build, Test, and Development Commands
 
 ```sh
-BeefBuild                          # Build from workspace root (Debug Linux64)
+build                             # Build from workspace root (Debug Linux64)
 ./build/Debug_Linux64/PFUI/PFUI   # Run the counter demo (console tree dump)
 ```
 
@@ -95,7 +95,7 @@ General expectations:
 
 ## Agent-Specific Instructions
 
-- **Do not run `BeefBuild` from the command line.** The SDL3 managed dependency has a cache-state issue with the CLI build tool. The user handles all builds from the Beef IDE. Do not attempt `BeefBuild` or any other build command until the user explicitly lifts this restriction.
+- Build the project with the command `build` (uses the project's devenv build script).
 - Agent skills and configurations live in `.claude/skills/`.
 - **Milestone planning workflow:** When working on a new milestone from the roadmap, create a folder `plans/YYYYMMDD_<MilestoneName>/` containing:
   - `00_Plan.md` — the agreed implementation plan
