@@ -1,0 +1,6 @@
+FileVersion = 1
+
+[Locks.SDL3-Beef.Git]
+URL = "https://github.com/Booklordofthedings/SDL3-Beef"
+Tag = ""
+Hash = "d8df10fb1303ebb141e38bf97bc43c49afe1ece2"
