@@ -39,6 +39,15 @@ VStack(scope () => {
 5. **One widget class + component composition** (see Architecture below). Widgets are
    never subclassed; capabilities are component objects; the single inheritance point is
    the `Component` base class, one level deep.
+6. **Direct SDL2 now; renderer/platform abstraction deferred.** The framework uses SDL2
+   directly (via `BeefLibs/SDL2`: `SDL_Renderer` + `SDL2_ttf`) while the concatenative model
+   is being validated — the thesis under test lives on the framework side, where the
+   backend's identity is irrelevant, and a one-implementation abstraction is best *extracted*
+   from working code later than *designed* blind now. The only discipline kept from the
+   abandoned seam is **localization** (not abstraction): SDL2 drawing flows through one
+   concrete `Painter` module, and `SDL_Event` is adapted to a PFUI `InputEvent` at a single
+   boundary, so the eventual abstraction is a mechanical extract-interface refactor rather
+   than a rewrite. A build-your-own renderer (GL/software) is a far-future alternate backend.
 
 ## Architecture
 
@@ -166,13 +175,18 @@ slot is designed in; the side table comes with the first stateful widget.
 
 ## Deferred
 
-Roadmap planning session (next), then per its phases: real renderer, layout pass
-(constraints-down/sizes-up; sum on main axis, max on cross axis, leftover to `Spacer`s),
-widget-ID side table, hover/press interaction states + declarative style responses,
-memoization, models, text input, focus/hit-testing, drag (an input protocol, not a
-component), animations, accessibility (semantic roles for composed widgets), image/asset
-pipeline, complex-object primitives, core/widgets package split (mechanical later, thanks
-to cross-project extensions).
+Roadmap set in `plans/20260718_Roadmap/00_roadmap.md`. Milestone spine (each ends in a
+runnable demo): **M0** SDL2 window opens · **M1** static tree lays out (flex:
+constraints-down/sizes-up, sum-main/max-cross, leftover→`Spacer`) and paints via a concrete
+SDL2 `Painter` module · **M2** real pointer input → hit-test → dispatch (the minimal GUI-app
+goal; `SimulateClick` retired) · **M3** hover/press states + the repaint-vs-rebuild split ·
+**M4** first persistent state (scroll) forcing the widget-ID side table + clipping · **M5**
+text input + focus + keyboard. Text/fonts is the twice-appearing sleeper (measure gates
+layout, raster gates render), largely covered by SDL2_ttf. Earmarked beyond: memoization
+and `Model<T>` (only if profiled slow), animations, drag protocol, image/asset pipeline,
+complex-object primitives, accessibility, the deferred **renderer/platform abstraction +
+alternate backend** (extracted from the concrete SDL2 `Painter` once the model is proven),
+core/widgets split (mechanical later, thanks to cross-project extensions).
 
 ## Prototype map
 

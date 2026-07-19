@@ -1,7 +1,7 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/App.bf", "src/Program.bf", "/home/vendinois/.local/share/beef/BeefLibs/corlib/src/Delegate.bf"]
+RecentFilesList = ["src/Core/SDLApp.bf"]
 
 [MainWindow]
 X = 0
@@ -44,23 +44,12 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
-TabLabel = "App.bf"
-TabWidth = 75.0
+TabLabel = "SDLApp.bf"
+TabWidth = 86.0
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "src/App.bf"
-CursorPos = 1231
-VertPos = 84.375
-ProjectName = "PFUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Program.bf"
-TabWidth = 93.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Program.bf"
-CursorPos = 1549
-VertPos = 225.0
+FilePath = "src/Core/SDLApp.bf"
+CursorPos = 541
 ProjectName = "PFUI"
 
 [[MainDockingFrame.DockedWidgets]]

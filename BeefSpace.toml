@@ -5,3 +5,4 @@ StartupProject = "PFUI"
 
 [Projects]
 PFUI = {Path = "."}
+SDL3-Beef = {Git = "https://github.com/Booklordofthedings/SDL3-Beef"}

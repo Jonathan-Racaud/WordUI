@@ -16,6 +16,20 @@ static class Words
 
 using static PFUI.Words;
 
+// M0 demo: opens a colored SDL3 window; closes on X.
+class M0App : PFUI.SDLApp
+{
+	public this()
+	{
+		ClearColor = .(20, 40, 60, 255);
+	}
+
+	protected override void Build()
+	{
+		VStack(scope () => {});
+	}
+}
+
 class CounterApp : App
 {
 	int mCount;
@@ -61,7 +75,22 @@ class Program
 			return RunApp(scope UnbalancedApp());
 		if (args.Count > 0 && args[0] == "--test-leftover")
 			return RunApp(scope LeftoverApp());
+		if (args.Count > 0 && args[0] == "--test-counter")
+			return RunCounterConsole();
 
+		let app = scope M0App();
+		app.Run();
+		return 0;
+	}
+
+	static int RunApp(App app)
+	{
+		app.RebuildIfNeeded();
+		return 0;
+	}
+
+	static int RunCounterConsole()
+	{
 		let app = scope CounterApp();
 
 		Console.WriteLine("=== initial build ===");
@@ -80,12 +109,6 @@ class Program
 		Console.WriteLine("\n=== no state change -> no rebuild ===");
 		Console.WriteLine("rebuilt: {}", app.RebuildIfNeeded());
 
-		return 0;
-	}
-
-	static int RunApp(App app)
-	{
-		app.RebuildIfNeeded();
 		return 0;
 	}
 }
