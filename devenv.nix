@@ -21,4 +21,9 @@
     '';
     brun.exec = "build && run";
   };
+
+  tasks = {
+    "pfui:build".exec = "build";
+    "pfui:run".exec = "run";
+  };
 }
