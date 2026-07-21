@@ -1,0 +1,139 @@
+---
+title: Drawable Primitives
+description: Tier 3 — a Component with Measure/Draw overrides for custom rendering
+---
+
+For custom rendering, subclass `Component` and override its virtual hooks. This is the rare
+case; most widgets are factored words (Tier 1), not new drawable primitives. The goal is to
+propose an escape hatch for pixel-level drawing without forcing every widget author to learn
+a renderer abstraction.
+
+## The Component hooks
+
+`Component` provides virtual methods that framework passes call into:
+
+```beef
+public abstract class Component
+{
+    public virtual void Describe(String str) { }
+    public virtual void Measure(Size available) { }
+    public virtual void DrawBackground(Painter painter, Rect rect) { }
+    public virtual void DrawContent(Painter painter, Rect rect) { }
+    public virtual void DrawOverlay(Painter painter, Rect rect) { }
+}
+```
+
+| Hook | Called by | Purpose |
+|---|---|---|
+| `Describe` | `TreeDump` | Human-readable description string |
+| `Measure` | Layout pass | Return intrinsic size (sets `mMeasured`) |
+| `DrawBackground` | Paint pass (z-order: back) | Fill, background color |
+| `DrawContent` | Paint pass (z-order: middle) | Text, custom drawing |
+| `DrawOverlay` | Paint pass (z-order: front) | Borders, debug overlays |
+
+## A minimal drawable: filled rectangle
+
+```beef
+public class FilledRect : Component
+{
+    public Color FillColor = .White;
+
+    public override void DrawBackground(Painter painter, Rect rect)
+    {
+        painter.FillRect(rect, FillColor);
+    }
+
+    public override void Describe(String str)
+    {
+        str.AppendF($"fill={FillColor}");
+    }
+}
+```
+
+Then a modifier word to make it usable:
+
+```beef
+extension UI
+{
+    public static void FilledRect(Color c)
+    {
+        NewWidget("FilledRect");
+        let comp = new:BuildAlloc FilledRect() { FillColor = c };
+        Attach(comp);
+    }
+}
+```
+
+## A more complete example: custom progress bar
+
+```beef
+public class ProgressBar : Component
+{
+    public float Progress;     // 0.0 – 1.0
+    public Color FillColor = .Blue;
+    public Color TrackColor = .(60, 60, 60, 255);
+
+    public override void DrawBackground(Painter painter, Rect rect)
+    {
+        // Track (full width, grey)
+        painter.FillRoundRect(rect, TrackColor, 4);
+    }
+
+    public override void DrawOverlay(Painter painter, Rect rect)
+    {
+        // Fill (proportional width, colored)
+        float fillWidth = rect.Width * Progress;
+        let fillRect = Rect(rect.X, rect.Y, fillWidth, rect.Height);
+        painter.FillRoundRect(fillRect, FillColor, 4);
+    }
+
+    public override void Describe(String str)
+    {
+        str.AppendF($"progress={Progress * 100}%");
+    }
+}
+
+extension UI
+{
+    public static void ProgressBar(float progress)
+    {
+        NewWidget("ProgressBar");
+        Attach(new:BuildAlloc ProgressBar() { Progress = progress });
+    }
+}
+```
+
+Usage:
+
+```beef
+VStack(scope () => {
+    ProgressBar(0.75f); Width(.Percent(1.0f)); FixedSize(0, 20);
+});
+```
+
+## The Painter API
+
+The `Painter` class (in `src/Core/Painter.bf`) wraps SDL3 rendering:
+
+| Method | Description |
+|---|---|
+| `FillRect(Rect, Color)` | Filled rectangle |
+| `FillRoundRect(Rect, Color, float radius)` | Filled rounded rectangle |
+| `DrawRect(Rect, Color)` | Rectangle outline |
+| `DrawRoundRect(Rect, Color, float radius)` | Rounded rectangle outline |
+| `DrawText(StringView, float x, float y, Color)` | Render text (uses active TTF font) |
+| `MeasureText(StringView)` | Get pixel size of text |
+
+Currently, `Painter` is a concrete class over SDL3 with no abstraction. Direct access is fine
+for experiments; the eventual renderer abstraction will extract a common interface from
+working code.
+
+## When to use Tier 3
+
+- You need custom pixel drawing that existing components (TextStyle, Interior, Boundary)
+  don't cover
+- You need to combine background and overlay drawing in a specific way
+- You're building a completely new visual primitive (progress bar, slider track, chart)
+
+If you can achieve the visual with `Background { ... }` + `Border { ... }` on an existing
+widget, do that instead; it's simpler and doesn't require a new class.

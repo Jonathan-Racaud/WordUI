@@ -1,0 +1,35 @@
+---
+title: Roadmap
+description: PFUI milestone status and upcoming work
+---
+
+For the full discussion, see [`plans/20260718_Roadmap/00_roadmap.md`](https://github.com/vendinois/PFUI/blob/main/plans/20260718_Roadmap/00_roadmap.md).
+
+PFUI is built in milestones, each ending in a runnable demo that validates one layer of the
+stack. The goal is to de-risk every layer before the next one depends on it, so that we never
+build on an unproven foundation.
+
+## Milestones
+
+| Milestone | Status | What |
+|---|---|---|
+| **M0** — SDL window | ✅ Complete | SDL3 window opens, event loop, close on ✕. De-risked Beef+SDL3 linkage before any framework code depended on it. |
+| **M1** — Static tree renders | ✅ Complete | Flex layout pass (constraints-down/sizes-up, sum-main/max-cross, leftover→Spacer), concrete `Painter` over SDL3 renderer + TTF, text measurement + rasterization. Counter UI appears laid out in the window (not yet clickable). |
+| **M2** — Real input | ✅ Complete | SDL pointer events → hit-test rects → dispatch `Clickable` → `Invalidate` → rebuild → repaint. Clicking +/− updates the count. *Minimal GUI app goal reached.* |
+| **M3** — Interaction states | 🔲 In progress | Cross-axis alignment done. Next: hover/press states + **repaint-vs-rebuild split** (hover must not trigger a tree rebuild). Exit: buttons highlight on hover with no rebuild. |
+| **M4** — Persistent state: scroll | 🔲 Future | Widget-identity side table (parent path + call index + `Key`), rebuild-surviving store, clipping, wheel events. Exit: scroll a list, click a button, scroll position survives. |
+| **M5** — Text input, focus, keyboard | 🔲 Future | Focus routing, caret, key events, editing. Depends on M4 identity. Exit: type into and edit a text field. |
+
+## Earmarked (post-M5)
+
+Memoization (only if profiled slow) · `Model<T>` observables + `Bind` · Animations ·
+Drag protocol · Image/asset pipeline · Complex-object primitives · Accessibility ·
+**Renderer/platform abstraction + alternate backend** (extracted from concrete `Painter`
+once the concatenative model is proven).
+
+## Constraint checkpoints
+
+- M1: Rects on transient widgets (freed with arena) ✅
+- M3: Repaint loop allocates nothing per frame
+- M4: Side-table eviction policy for vanished keys
+- Post-M2/M5: Profile before any memoization/observer work

@@ -22,9 +22,18 @@ src/
 ├── Handlers/              # Event words: OnClick
 ├── Diagnostics/           # Diagnostics words: StackDump, TreeDump
 └── Program.bf             # Entry point, demo apps, and negative test harnesses
+docs/                      # Canonical documentation (MDX — source of truth)
+├── concepts/              # Architecture: concatenative model, widget model, modifiers, rebuild
+├── api/                   # API reference: every word with stack effect and examples
+├── guides/                # Authoring guides: factoring words, components, primitives, state
+├── design/                # Locked decisions with rationale
+├── index.mdx              # Project overview
+├── getting-started.mdx    # Build, run, first app walkthrough
+└── roadmap.mdx            # Milestone status
+doc-website/               # Astro Starlight documentation site (reads from docs/ via symlink)
 ```
 
-**Key files:** `DESIGN.md` is the source of truth for architectural decisions — read it before proposing API changes.
+**Key files:** `DESIGN.md` is the source of truth for architectural decisions — read it before proposing API changes. Canonical documentation lives in [`docs/`](docs/); the doc website is in [`doc-website/`](doc-website/).
 
 ---
 
@@ -87,9 +96,19 @@ General expectations:
 
 ## Documentation & References
 
-- [`DESIGN.md`](DESIGN.md) — architecture, locked decisions, and rationale. **Required reading** for anyone adding API surface.
+- [`docs/`](docs/) — **canonical documentation** (MDX). Source of truth for all user-facing docs: concepts, API reference, guides, design decisions, roadmap.
+- [`doc-website/`](doc-website/) — Astro Starlight site that reads `docs/` as its content directory. `bun run dev` from `doc-website/` starts the dev server.
+- [`DESIGN.md`](DESIGN.md) — architecture, locked decisions, and rationale. **Required reading** for anyone adding API surface. Points to `docs/` for expanded treatment.
 - [`plans/`](plans/) — session plans, explored paths, and rejected alternatives.
-- [`README.md`](README.md) — quick-start, status, and build prerequisites.
+- [`README.md`](README.md) — short landing page with links into `docs/`.
+
+### Documentation maintenance rules
+
+- **When adding a new public word** (widget, modifier, handler, pen): add its entry in the corresponding `docs/api/*.mdx` file with stack effect, parameter types, description, and a code example.
+- **When changing a locked decision**: update both [`DESIGN.md`](DESIGN.md) and [`docs/design/decisions.mdx`](docs/design/decisions.mdx).
+- **When completing a milestone**: update [`docs/roadmap.mdx`](docs/roadmap.mdx).
+- **When adding a new concept or pattern**: add it to the appropriate `docs/concepts/*.mdx` or `docs/guides/*.mdx`.
+- **Doc files are MDX** — they render as plain Markdown on GitHub and as styled pages in Starlight. Keep MDX-specific syntax minimal; use frontmatter for metadata only.
 
 ---
 

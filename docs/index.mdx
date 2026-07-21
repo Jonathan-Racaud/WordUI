@@ -1,0 +1,53 @@
+---
+title: PFUI
+description: An experimental concatenative UI framework for the Beef programming language
+---
+
+PFUI is an experimental UI framework for [Beef](https://www.beeflang.org/) which captures the
+essence of **concatenative programming** — inspired by [Factor](https://factorcode.org/)'s
+UI vocabulary — inside an applicative language, without building an interpreter. The goals
+behind this project is to try and bring Factor-style UI factoring to a statically-typed,
+ahead-of-time compiled language so that widget construction becomes a sequence of **words**
+operating on an implicit stack with zero parameter plumbing.
+
+```beef
+using static PFUI.UI;
+
+VStack(scope () => {
+    Label("Title"); FontSize(24);
+    HStack(scope () => {
+        Button("+"); OnClick(increment);
+        Spacer();
+        Button("-"); OnClick(decrement);
+    }); Spacing(4);      // modifies the HStack
+}); Padding(8);          // modifies the VStack
+```
+
+What I am tackling is not new and I will reinvent some wheels — that's part of the motivation.
+The thesis under test is whether concatenative-style UI composition can work for real
+applications in a language that was never designed for it.
+
+## Architecture at a glance
+
+- **One sealed `Widget` class**: never subclassed; capabilities are `Component` objects in a bag
+- **Words are `extension UI` methods**: your app defines its own words without touching the framework
+- **Rebuild-on-invalidate**: plain Beef fields + `Invalidate()`; each build allocates in a bump arena
+- **Direct SDL3 rendering**: drawing flows through one concrete `Painter` module
+
+## Where to start
+
+| Section | For |
+|---|---|
+| [Getting Started](/getting-started) | Build, run, your first Counter app |
+| [Concepts](/concepts/concatenative-model) | The word model, stack, and modifiers |
+| [API Reference](/api/widgets) | Every word with its stack effect |
+| [Guides](/guides/factoring-words) | Authoring custom widgets, components, and state |
+| [Design Decisions](/design/decisions) | Locked architecture choices and rationale |
+| [Roadmap](/roadmap) | Current milestone status |
+
+## Status
+
+Early experiment. Working today: the word vocabulary (Label, Button, HStack/VStack,
+Spacer), modifiers, styling (Background/Border pens), OnClick dispatch,
+flex layout pass, SDL3 rendering with real mouse hit-test → click, and
+runtime stack diagnostics. Interaction states, scroll, and text input are upcoming.

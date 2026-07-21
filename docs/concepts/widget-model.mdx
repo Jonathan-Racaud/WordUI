@@ -1,0 +1,91 @@
+---
+title: Widget Model
+description: The sealed Widget class, Component composition, and capability queries
+---
+
+PFUI has **one widget class** and it is `sealed`; the compiler enforces the no-subclassing rule.
+All capabilities (text, layout, styling, click handling) are `Component` objects stored in a bag
+on the widget. This is intentionally opinionated — subclass trees would explode combinatorially
+for something like a clickable styled label, but bags handle it trivially.
+
+## Widget
+
+`Widget` (in `src/Core/Widget.bf`) carries:
+
+- **Identity:** `Name` (debugging label), `Key` (stable identity for future state side-table)
+- **Layout:** `Padding` — the one universal layout property
+- **Capabilities:** a bag of `Component` objects
+
+## Component
+
+`Component` is an `abstract class` and the **single inheritance point** in the framework, one level
+deep. It provides virtual hooks that framework passes call into:
+
+| Hook | Called by | Purpose |
+|---|---|---|
+| `Describe(String)` | TreeDump | Human-readable description |
+| `Measure(Size)` | Layout pass | Return intrinsic size |
+| `DrawBackground` | Painter | Fill, background color |
+| `DrawContent` | Painter | Text, custom drawing |
+| `DrawOverlay` | Painter | Borders, debug overlays |
+
+Framework components and user components are **peers**; every pass dispatches through the same
+virtual hooks, so a user's component participates in layout, rendering, and tree dumps with zero
+registration.
+
+## Capability queries
+
+```beef
+// Get<T>() — returns null if the component isn't attached
+let text = widget.Get<TextStyle>();
+if (text != null) { ... }
+
+// Require<T>(word) — fails with a named error if absent
+let text = widget.Require<TextStyle>("FontSize");
+// Error: "HStack has no TextStyle — FontSize does not apply to it"
+```
+
+`Require<T>` is the standard pattern in modifier words; it produces a readable error when a
+modifier is applied to a widget that doesn't carry the expected component.
+
+## Attach and duplicates
+
+```beef
+widget.Attach(new:alloc TextStyle() { Text = "Hello" });
+```
+
+`Attach` **rejects duplicate component types**; a second `TextStyle` on one widget is almost
+always a bug (a construction word firing at the wrong stack top). The framework enforces this at runtime
+with a named error.
+
+## Why not subclasses?
+
+PFUI chose rebuild-on-invalidate, so widgets are **transient descriptions**: data records
+consumed by framework passes, not long-lived stateful actors. Behavior polymorphism moves down
+to `Component`:
+
+- **Inheritance for behavior:** `Component` subclasses override `Measure`/`Draw*` hooks. One level.
+- **Composition for capabilities:** widgets are bags. A clickable styled label is
+  `TextStyle + Clickable + Interior`; no `ClickableLabel` class can ever exist. Subclass trees
+  would explode combinatorially; bags handle it trivially.
+
+## The word-author API
+
+Widget words are written in the framework's own word language:
+
+```beef
+public static void Label()
+{
+    let text = PopStr("Label");   // 1. pop inputs FIRST
+    NewWidget("Label");           // 2. then push the widget
+    Attach(new:BuildAlloc TextStyle() { Text = text });   // 3. then attach/modify
+}
+```
+
+**The pop-inputs-first rule matters:** `NewWidget` pushes on top of any pending inputs, so
+popping after it finds the widget, not the input. This is Factor's own discipline (consume
+inputs before pushing outputs) surfacing in Beef.
+
+Because the widget is on the stack during construction, **widget words can reuse modifier
+words as defaults** (`NewWidget("Button"); …; FontSize(14); TextColor(.White);`), and default
+sets factor into ordinary words.

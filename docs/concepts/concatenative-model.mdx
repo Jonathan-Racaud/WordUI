@@ -1,0 +1,118 @@
+---
+title: Concatenative Model
+description: How PFUI uses words and an implicit widget stack to build UIs without an interpreter
+---
+
+PFUI ports Factor's concatenative UI vocabulary into Beef, an applicative language, without
+building an interpreter. Instead, every word is a **static extension method** on the `UI`
+class, and `using static PFUI.UI;` brings them all into scope as bare words — Beef's own
+method resolution does the rest.
+
+## Words and the implicit stack
+
+PFUI maintains a **thread-local widget stack** during `Build()`. Words push and pop values on this stack:
+
+```beef
+using static PFUI.UI;
+
+// "Hello" is pushed onto the stack, then Label() pops it and creates a widget
+Str("Hello");
+Label();
+```
+
+This is the **primitive form**. Most words have **convenience overloads** that combine the push+pop:
+
+```beef
+Label("Hello");   // sugar for: Str("Hello"); Label();
+```
+
+### Stack effects
+
+Every word has a **stack effect**, a notation showing what it consumes and produces:
+
+```
+Label     ( string -- widget )
+TextColor ( widget color -- widget )
+VStack    ( mark child* widget -- widget )
+```
+
+Modifier words (like `TextColor`, `FontSize`) take the top widget, modify it, and leave it back on
+the stack, which means modifiers **compose freely** onto the stack top — including onto containers
+that were just closed:
+
+```beef
+VStack(scope () => {
+    Label("A");
+    Label("B");
+}); Padding(8);    // Padding applies to the VStack, which is on top after ") ;"
+```
+
+## Rule B: modifiers act on the stack top
+
+Always write `Button("+"); OnClick(f);`, never `OnClick(f); Button();`. The modifier attaches to
+whatever widget is on top of the stack at the moment it runs. This is why closed containers compose
+with modifiers for free (see above).
+
+## Hybrid data passing
+
+PFUI uses a **hybrid** convention:
+
+| Kind | Form | Example |
+|---|---|---|
+| Widget data (primitive) | Stack | `Str("x"); Label();` |
+| Widget data (sugar) | Applicative | `Label("x")` |
+| Modifier parameters | Always applicative | `TextColor(.Red)`, `Padding(8)` |
+
+This preserves the concatenative flavor for widget construction while keeping modifiers
+readable.
+
+## Delegate blocks for containers
+
+Containers use Beef **delegate blocks** (lambdas) as the user-facing API:
+
+```beef
+VStack(scope () => {
+    Label("One");
+    Label("Two");
+}); Spacing(4);
+```
+
+Internally, this is built on a public paired-primitive pattern:
+
+```beef
+// The delegate form expands to:
+_VStack();
+Label("One");
+Label("Two");
+VStack_();
+Spacing(4);
+```
+
+`_VStack()` pushes a named marker. The body words run. `VStack_()` collects children back to the
+marker, creates the container widget with a `StackLayout` component, and pushes it. The paired
+primitives remain public so users can factor across function boundaries when a single delegate
+block isn't enough.
+
+## Extensions: words are free
+
+Every word is a `public static` method in an `extension UI` block. Beef extensions work **across
+projects**, so your app can define its own words, components, and modifiers without touching the
+framework:
+
+```beef
+namespace MyApp;
+
+extension UI
+{
+    public static void TitleLabel(StringView text)
+    {
+        Label(text);
+        FontSize(24);
+        TextColor(.White);
+    }
+}
+```
+
+`using static MyApp.UI;` makes `TitleLabel("Hello")` available alongside every PFUI word,
+indistinguishable from built-in vocabulary. This is the framework's core payoff: factoring UI
+descriptions into named words with zero parameter plumbing.

@@ -1,5 +1,10 @@
 # PFUI — Design Notes
 
+> **Canonical documentation is in [`docs/`](docs/).** This file remains the root-level source
+> of truth for architecture decisions but is no longer the sole reference. See
+> [`docs/concepts/`](docs/concepts/) for expanded explanations and
+> [`docs/design/decisions.mdx`](docs/design/decisions.mdx) for locked decisions with rationale.
+
 PFUI is an experiment: capture the *essence* of concatenative programming — Factor's UI
 vocabulary in particular — inside Beef, an applicative language, without building an
 interpreter. UI is a sequence of **words** operating on an implicit widget stack.
@@ -199,3 +204,5 @@ core/widgets split (mechanical later, thanks to cross-project extensions).
 | `src/Handlers/` | `OnClick` (attach-on-demand Clickable) |
 | `src/Diagnostics/` | `StackDump` (PrintStack), `TreeDump`, `Simulate` (SimulateClick) |
 | `src/Program.bf` | counter + list demo; `--test-mismatch` / `--test-unbalanced` / `--test-leftover` |
+| `docs/` | Canonical documentation: concepts, API reference, guides, design decisions, roadmap |
+| `doc-website/` | Astro Starlight documentation website (reads from `docs/`) |

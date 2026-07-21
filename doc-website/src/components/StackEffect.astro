@@ -1,0 +1,25 @@
+---
+// src/components/StackEffect.astro
+// Renders Factor-style stack effect notation: ( input* -- output* )
+export interface Props {
+	effect: string;
+}
+const { effect } = Astro.props;
+---
+<code class="stack-effect not-content">{effect}</code>
+
+<style>
+	.stack-effect {
+		display: inline-block;
+		font-family: var(--__sl-font-mono);
+		font-size: 0.875em;
+		background: var(--sl-color-gray-6);
+		color: var(--sl-color-gray-1);
+		padding: 0.125rem 0.5rem;
+		border-radius: 0.25rem;
+		white-space: nowrap;
+	}
+	:global([data-theme="dark"]) .stack-effect {
+		background: var(--sl-color-gray-5);
+	}
+</style>

@@ -1,0 +1,125 @@
+---
+title: Modifiers
+description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing
+---
+
+Modifier words act on the widget at the stack top. They follow **Rule B**: always write the
+widget word first, then its modifiers. This is the concatenative discipline — the modifier
+sees whatever widget is on top and modifies it in place, which means closed containers compose
+with modifiers for free.
+
+## Layout modifiers
+
+### Padding
+
+```
+( widget float -- widget )
+```
+
+```beef
+VStack(scope () => { ... }); Padding(8);
+```
+
+Applies uniform padding to the stack-top widget. Padding is universal; every widget
+participates in flow layout.
+
+### Spacing
+
+```
+( widget float -- widget )
+```
+
+```beef
+HStack(scope () => {
+    Button("A");
+    Button("B");
+}); Spacing(4);
+```
+
+Sets the gap between children in a stack container. Requires the widget to have a
+`StackLayout` component — applying `Spacing` to a `Label` errors with:
+`"Label has no StackLayout — Spacing does not apply to it"`.
+
+## Text modifiers
+
+### TextColor
+
+```
+( widget color -- widget )
+```
+
+```beef
+Label("Warning"); TextColor(.Red);
+```
+
+Sets the text color on the stack-top widget's `TextStyle`. Requires `TextStyle`.
+
+### FontSize
+
+```
+( widget float -- widget )
+```
+
+```beef
+Label("Title"); FontSize(24);
+```
+
+Sets the font size in pixels. Requires `TextStyle`.
+
+## Identity
+
+### Key
+
+```
+( widget int -- widget )
+```
+
+```beef
+Label(scope:: $"Item {i}"); Key(i);
+```
+
+Sets a stable identity on the stack-top widget. `Key` is designed into the `Widget` struct
+but is currently a placeholder; the persistent-state side table that uses it arrives in M4.
+
+## Cross-axis alignment
+
+These words set the `CrossAlign` property on a `LayoutHint` component (get-or-create pattern).
+They determine how a child is positioned perpendicular to the stack's main axis.
+
+| Word | `CrossAlign` | Effect |
+|---|---|---|
+| `Center()` | `.Center` | Center in the cross axis |
+| `AlignStart()` | `.Start` | Align to the start of the cross axis |
+| `AlignEnd()` | `.End` | Align to the end of the cross axis |
+| `AlignStretch()` | `.Stretch` | Stretch to fill the cross axis (default) |
+
+```beef
+VStack(scope () => {
+    Label("Centered"); Center();
+    Label("Left"); AlignStart();
+    Label("Right"); AlignEnd();
+});
+```
+
+## Sizing constraints
+
+These words set sizing constraints on the `LayoutHint` component.
+
+| Word | Description |
+|---|---|
+| `Width(SizingConstraints)` | Set width constraint |
+| `Height(SizingConstraints)` | Set height constraint |
+| `FixedSize(float wh)` | Set both width and height to `Fixed(wh)` |
+| `FixedSize(float w, float h)` | Set width and height independently |
+
+`SizingConstraints` is a discriminated union:
+- `.Unconstrained` — natural size
+- `.Fixed(float)` — exact pixels
+- `.Min(float)` — at least this size
+- `.Max(float)` — at most this size
+- `.Percent(float)` — fraction of parent (0.0–1.0)
+- `.Range(float min, float max)` — between min and max
+
+```beef
+Button("OK"); FixedSize(120, 40);
+```

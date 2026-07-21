@@ -1,0 +1,109 @@
+---
+title: Styling
+description: Pen blocks for styling — Background, Border, Fill, Stroke, Radius, StrokeWidth
+---
+
+Pen blocks are a modifier sub-vocabulary for styling — they open a "pen" on the stack that
+collects property assignments, then apply them all at once when the block closes. The goal
+is to propose a styling syntax that is readable and composable without introducing a CSS-like
+cascade or a separate style-sheet language.
+
+## Background (Interior pen)
+
+```beef
+Button("Submit");
+Background(scope () => {
+    Fill(.Blue);
+    Radius(6);
+});
+```
+
+Uses the paired-primitive pattern:
+- `_Interior()` — pushes a marker, then an `Interior` pen
+- Pen property words modify the pen on top
+- `Interior_()` — pops the pen, finds the marker, attaches the `Interior` to the widget below
+
+Stack effect:
+```
+_Interior   ( widget -- widget mark pen )
+Fill        ( widget mark pen color -- widget mark pen )
+Radius      ( widget mark pen float -- widget mark pen )
+Interior_   ( widget mark pen -- widget )
+```
+
+## Border (Boundary pen)
+
+```beef
+Button("Outline");
+Border(scope () => {
+    Stroke(.White);
+    StrokeWidth(2);
+    Radius(6);
+});
+```
+
+Same pattern as Background but with `Boundary`:
+- `_Border()` / `Border_()` / `Border(delegate)`
+
+## Pen property words
+
+### Fill
+
+```
+( pen color -- pen )
+```
+
+Sets the fill color on an active `Interior` pen. Must be inside a `Background { }` block;
+calling it outside errors with: `"no active Interior — are you inside a Background block?"`
+
+```beef
+Background(scope () => { Fill(.(255, 0, 0, 255)); });
+```
+
+### Stroke
+
+```
+( pen color -- pen )
+```
+
+Sets the stroke color on an active `Boundary` pen. Must be inside a `Border { }` block.
+
+```beef
+Border(scope () => { Stroke(.White); });
+```
+
+### Radius
+
+```
+( pen float -- pen )
+```
+
+Sets the corner radius on either an `Interior` or `Boundary` pen. Works inside either
+`Background { }` or `Border { }`. Errors if no pen is active.
+
+```beef
+Background(scope () => { Fill(.Red); Radius(8); });
+Border(scope () => { Stroke(.White); Radius(8); });
+```
+
+### StrokeWidth
+
+```
+( pen float -- pen )
+```
+
+Sets the stroke width on an active `Boundary` pen. Must be inside a `Border { }` block.
+
+```beef
+Border(scope () => { Stroke(.Black); StrokeWidth(3); });
+```
+
+## Combining pens
+
+Pens compose freely; you can have both a Background and a Border on the same widget:
+
+```beef
+Button("Styled");
+Background(scope () => { Fill(.Blue); Radius(8); });
+Border(scope () => { Stroke(.White); StrokeWidth(2); Radius(8); });
+```

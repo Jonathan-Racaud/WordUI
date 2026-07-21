@@ -5,6 +5,8 @@
     sdl3
     sdl3-ttf
     sdl3-image
+
+    bun # For the doc-website
   ];
 
   scripts = {

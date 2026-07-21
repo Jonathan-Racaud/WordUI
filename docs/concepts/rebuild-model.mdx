@@ -1,0 +1,119 @@
+---
+title: Rebuild Model
+description: How PFUI uses rebuild-on-invalidate with bump-allocation arenas for widget trees
+---
+
+PFUI uses **rebuild-on-invalidate**: Flutter's model minus the diffing. Every `Build()` run
+produces a completely fresh widget tree; the old tree is freed wholesale. The goal is
+simplicity and correctness by construction — no stale references, no missed updates, no
+reconciliation bugs.
+
+## The App base class
+
+`App` (in `src/Core/App.bf`) is the rebuild driver:
+
+```beef
+abstract class App
+{
+    public abstract void Build();
+
+    public void Invalidate() { mDirty = true; }
+    public void RebuildIfNeeded() { if (mDirty) { /* rebuild */ } }
+}
+```
+
+## Lifecycle
+
+```
+User action (click, timer)
+    │
+    ▼
+Handler calls Invalidate()
+    │
+    ▼
+Event loop calls RebuildIfNeeded()
+    │
+    ▼
+Old tree freed (BumpAllocator deleted)
+    │
+    ▼
+New BumpAllocator created
+    │
+    ▼
+Build() runs → word sequence executes → new tree
+    │
+    ▼
+Layout pass (constraints-down, sizes-up, flex)
+    │
+    ▼
+Paint pass (DrawBackground → DrawContent → DrawOverlay)
+```
+
+## BumpAllocator
+
+Every allocation during `Build()` (widgets, components, lists, string copies) goes through
+`new:BuildAlloc` (aliased from the build arena). When the next rebuild deletes the arena,
+**everything dies at once**. No individual `delete` calls, no reference counting, no GC pressure.
+
+This is why widgets are transient descriptions, not long-lived objects: they don't survive a
+rebuild cycle.
+
+## What survives a rebuild
+
+**Plain Beef fields** on your App subclass. These are the only persistent state:
+
+```beef
+class CounterSDLApp : SDLApp
+{
+    int mCount = 0;           // survives rebuilds
+    List<String> mItems = .(); // survives rebuilds
+
+    public override void Build()
+    {
+        // This entire tree is transient, rebuilt from scratch each time
+        VStack(scope () => {
+            Label(scope:: $"Count: {mCount}");
+            Button("+"); OnClick(new => Increment);
+        });
+    }
+
+    void Increment()
+    {
+        mCount++;       // mutate persistent state
+        Invalidate();   // trigger rebuild
+    }
+}
+```
+
+## When to call Invalidate()
+
+Call `Invalidate()` whenever state that affects the UI changes:
+
+- After a click handler mutates a field
+- After a timer fires
+- After an external event updates model data
+
+The framework batches invalidations: calling `Invalidate()` multiple times between frames
+only triggers one rebuild.
+
+## No diffing
+
+There is no virtual-DOM diff, no tree reconciliation. Every rebuild produces a **brand new
+tree**. This is simple and correct by construction, at the cost of allocating
+a fresh tree each time.
+
+If whole-tree rebuild ever proves too slow (to be measured, not assumed), the growth path is:
+1. **Memoized subtrees**: subtrees whose inputs haven't changed skip reconstruction (needs
+   widget identity)
+2. **`Model<T>` observables + `Bind`**: retained-mode vocabulary for granular updates (only
+   if memoization isn't enough)
+
+Both are earmarked for far-future optimization; the current model is the right default for
+an experimental framework — no point optimizing what hasn't been measured slow.
+
+## Repaint vs rebuild (M3+)
+
+Currently, every `Invalidate()` triggers a full rebuild + layout + paint. M3 will introduce
+a **repaint-vs-rebuild split**: hover highlights and other visual-only changes will trigger
+a repaint (re-run the paint pass on the existing tree) without a rebuild. This is the first
+point where the existing tree survives across frames.

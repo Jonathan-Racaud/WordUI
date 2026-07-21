@@ -1,0 +1,90 @@
+---
+title: Getting Started
+description: Build, run, and understand your first PFUI application
+---
+
+## Prerequisites
+
+- [Beef toolchain](https://www.beeflang.org/) (`BeefBuild` on your PATH)
+- SDL3 development libraries (installed via your system package manager or the project's Nix/devenv environment)
+
+## Build & run
+
+```sh
+# From the workspace root
+BeefBuild
+
+# Run the counter demo
+./build/Debug_Linux64/PFUI/PFUI
+```
+
+The counter demo opens an SDL3 window with a centered title label, `+`/`-` buttons in a
+horizontal stack, and a dynamic count display. Clicking the buttons updates the count via
+`Invalidate()` → rebuild → repaint.
+
+## Diagnostics flags
+
+The binary accepts test flags that verify stack-hygiene error handling:
+
+```sh
+./build/Debug_Linux64/PFUI/PFUI --test-mismatch    # Mismatched container close
+./build/Debug_Linux64/PFUI/PFUI --test-unbalanced   # Missing close word
+./build/Debug_Linux64/PFUI/PFUI --test-unclosed-pen # Unclosed pen block
+./build/Debug_Linux64/PFUI/PFUI --test-leftover     # Unconsumed stack values
+```
+
+Each flag runs a negative-test app class that intentionally triggers a named error.
+
+## Your first PFUI app
+
+Create a new Beef project and add a reference to PFUI. A minimal app:
+
+```beef
+using PFUI;
+using static PFUI.UI;
+
+class HelloApp : SDLApp
+{
+    int mCount = 0;
+
+    public override void Build()
+    {
+        VStack(scope () => {
+            Label(scope:: $"Count: {mCount}"); FontSize(32);
+            Button("Increment"); OnClick(new => Increment);
+        }); Padding(16);
+    }
+
+    void Increment()
+    {
+        mCount++;
+        Invalidate();
+    }
+}
+```
+
+The key pattern, which is intentionally simple so as to propose a low-friction starting point:
+
+- **State lives in plain Beef fields** (`mCount`).
+- **`Build()` describes the UI** as a function of that state: a sequence of words.
+- **`Invalidate()` triggers a rebuild**: the old widget tree is freed wholesale and a fresh one is allocated in a bump arena.
+- **Handlers close over state**: the `Increment` method reads and mutates `mCount`, then calls `Invalidate()` to reflect the change.
+
+## Project structure
+
+```
+src/
+├── Core/          # Foundation: Widget, App, UI (stack + ops), Component, Color, ...
+├── Components/    # Capability types: Clickable, StackLayout, TextStyle, ...
+├── Widgets/       # Word definitions: Label, Button, Stack, Spacer
+├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment
+├── Handlers/      # Event words: OnClick
+├── Diagnostics/   # Diagnostics words: PrintStack, DumpTree
+└── Program.bf     # Entry point, counter demo, negative-test harnesses
+```
+
+## Next steps
+
+- Read [the concatenative model](/concepts/concatenative-model) to understand words and the stack
+- Browse the [API reference](/api/widgets) for all available words
+- Follow the [factoring words guide](/guides/factoring-words) to create your own widgets

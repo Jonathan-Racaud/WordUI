@@ -1,0 +1,58 @@
+---
+title: Diagnostics
+description: Diagnostics words — PrintStack and DumpTree for debugging
+---
+
+Diagnostics words inspect the widget stack and tree at runtime, available in any
+`Build()` method. They are the Factor `.s` equivalent brought into Beef, and the
+goal is to make stack debugging as transparent as the concatenative model demands
+— every error already includes a stack dump via `Fail()`, and these words give you
+the same visibility on demand.
+
+## PrintStack
+
+```beef
+// In any Build() or word body:
+PrintStack();
+```
+
+Outputs the current widget stack contents to the console:
+
+```
+--- stack (3 items, top last) ---
+  Mark: "VStack"
+  [str "Count: 5"]
+  [Elem Label]
+```
+
+The stack prints top-last (stack bottom first, stack top last). Each item shows its
+type tag and value. Used automatically by `Fail()` on every error.
+
+## DumpTree
+
+```beef
+// On your App instance, after RebuildIfNeeded():
+app.RebuildIfNeeded();
+app.DumpTree();
+```
+
+Outputs an indented XML-like dump of the entire widget tree:
+
+```
+# ---- [UI Tree Dump] ---- #
+<VStack Padding=8 Key=0>
+  <Label Text=Title FontSize=24 Padding=0 Key=0/>
+  <HStack Spacing=4 Padding=0 Key=0>
+    <Button Text=+ Padding=8 Key=0/>
+    <Button Text=- Padding=8 Key=0/>
+  </HStack>
+</VStack>
+# ---- [/UI Tree Dump] ---- #
+```
+
+`DumpTree()` is **fully generic**; any component (framework or user-defined) appears through
+its `Describe` override without the framework knowing it exists.
+
+In the current SDL3 prototype, `DumpTree()` is mainly useful for debugging layout issues
+(post-rebuild rects are printed). The console-dump stand-in renderer from early development
+is still available but secondary to the SDL3 paint pass.

@@ -1,0 +1,85 @@
+---
+title: Handlers
+description: Event handler words — OnClick and the ClickHandler delegate
+---
+
+Event handler words attach behavior to widgets using the **get-or-create pattern**:
+if the widget already has the required component, reuse it; otherwise, create and attach a new one.
+This is how PFUI propose interactivity — not through widget subclasses, but through
+components that any word can attach to any widget.
+
+## OnClick
+
+```
+( widget ClickHandler -- widget )
+```
+
+```beef
+Button("+"); OnClick(new => Increment);
+```
+
+Attaches a `Clickable` component to the stack-top widget (creating one if absent) and
+registers the handler. Makes any widget clickable; no `ClickableButton` class ever needs
+to exist.
+
+### ClickHandler delegate
+
+```beef
+public delegate void ClickHandler();
+```
+
+A parameterless delegate. The handler typically closes over app state:
+
+```beef
+class CounterSDLApp : SDLApp
+{
+    int mCount = 0;
+
+    public override void Build()
+    {
+        VStack(scope () => {
+            Label(scope:: $"Count: {mCount}");
+            Button("+"); OnClick(new => Increment);
+            Button("-"); OnClick(new => Decrement);
+        });
+    }
+
+    void Increment() { mCount++; Invalidate(); }
+    void Decrement() { mCount--; Invalidate(); }
+}
+```
+
+### What happens on click
+
+1. SDL mouse-up event arrives at `SDLApp`'s event loop
+2. `PressTracker` checks: was the mouse-down and mouse-up on the same widget?
+3. If yes, it finds the widget's `Clickable` component and calls its `Handler`
+4. The handler runs user code (e.g. `mCount++`)
+5. The handler calls `Invalidate()` to trigger a rebuild
+
+### Handler lifetime
+
+Handlers registered via `RegisterHandler` are framework-owned, stored per build and freed
+on the next rebuild. Events only ever dispatch against the current tree, so a handler
+cannot outlive what it references.
+
+### The get-or-create pattern
+
+```beef
+public static void OnClick(ClickHandler h)
+{
+    let w = Top("OnClick");
+    var c = w.Get<Clickable>();
+    if (c == null)
+    {
+        c = new:BuildAlloc Clickable();
+        w.Attach(c);
+    }
+    RegisterHandler(h);
+    c.Handler = h;
+}
+```
+
+This pattern ensures `OnClick` works whether it's the first or Nth modifier on a widget;
+no ordering dependency. It's the standard pattern for any new behavior component you author
+(see [Custom Components](/guides/custom-components)).

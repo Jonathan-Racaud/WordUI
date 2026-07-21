@@ -1,0 +1,137 @@
+---
+title: Widgets
+description: Widget words — Label, Button, Stack, Spacer — with stack effects
+---
+
+Widget words push a `Widget` onto the stack. They consume their inputs from the stack first,
+then push the new widget (the pop-inputs-first rule). This is Factor's own discipline
+surfacing in Beef — consume inputs before pushing outputs, so the stack is always in a
+predictable state.
+
+## Label
+
+```
+( string -- widget )
+```
+
+```beef
+// Primitive form
+Str("Hello"); Label();
+
+// Sugar
+Label("Hello");
+```
+
+Creates a widget named `"Label"` with a `TextStyle` component carrying the popped string.
+To style the label, apply modifier words after it:
+
+```beef
+Label("Title"); FontSize(24); TextColor(.White);
+```
+
+## Button
+
+```
+( string -- widget )
+```
+
+```beef
+// Primitive form
+Str("+"); Button(); OnClick(handler);
+
+// Sugar
+Button("+"); OnClick(handler);
+```
+
+Creates a widget named `"Button"` with:
+- `TextStyle` (the label text)
+- `Interior` (default gray fill, radius 4)
+- `Boundary` (border stroke, width 1, radius 4)
+- `Padding` (8 on all sides)
+
+A `Button` is just a styled label; clickability arrives when `OnClick` attaches a `Clickable`
+component.
+
+**Overriding defaults:** any property can be changed by re-focusing after the word:
+
+```beef
+Button("Delete");
+Background(scope () => { Fill(.Red); Radius(6); });
+```
+
+## Spacer
+
+```
+( -- widget )
+```
+
+```beef
+Spacer();
+```
+
+Pushes a widget named `"Spacer"` with no components. The layout pass treats it as a flex-grow
+gap; it absorbs all leftover space in the main axis of its parent stack.
+
+```beef
+HStack(scope () => {
+    Button("Left");
+    Spacer();          // pushes buttons apart
+    Button("Right");
+});
+```
+
+## Container stacks
+
+Containers use a **triplet pattern**: `_Prefix()` opens, body words run, `Prefix_()` closes.
+The delegate-block form is sugar:
+
+### HStack
+
+```
+( mark child* widget -- widget )
+```
+
+| Word | Description |
+|---|---|
+| `_HStack()` | Push a named marker |
+| `HStack_()` | Create `"HStack"` widget with `StackLayout(Axis.Horizontal)`, collect children back to marker |
+| `HStack(delegate void())` | Sugar: `_HStack(); body(); HStack_()` |
+
+```beef
+HStack(scope () => {
+    Button("+");
+    Button("-");
+}); Spacing(4);
+```
+
+### VStack
+
+Same pattern as HStack but with `StackLayout(Axis.Vertical)`.
+
+```beef
+VStack(scope () => {
+    Label("Title");
+    Label("Subtitle");
+}); Padding(8);
+```
+
+### Paired primitives for cross-function factoring
+
+When a single delegate block isn't enough (e.g. children generated across multiple functions),
+use the paired primitives directly:
+
+```beef
+void HeaderSection()
+{
+    _VStack();
+    Label("Header");
+}
+
+void FooterSection()
+{
+    Label("Footer");
+    VStack_();  // closes the VStack opened by HeaderSection
+}
+```
+
+The paired primitives are public and safe; the named-marker mechanism catches mismatches.

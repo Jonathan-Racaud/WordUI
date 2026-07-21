@@ -1,0 +1,130 @@
+---
+title: Modifiers & Pen Blocks
+description: How modifiers act on the stack top, and the pen-block pattern for styling
+---
+
+Modifiers words and pen blocks is how PFUI propose styling and layout on the widget stack.
+The key insight is simple: modifiers always act on whatever widget sits at the stack top,
+which means they compose onto containers for free — no plumbing, no look-ahead, no special
+syntax for "this applies to the parent."
+
+## Modifier words
+
+Modifier words follow **Rule B**: they always act on the widget currently at the top of the
+stack. They pop it, modify it, and push it back:
+
+```
+TextColor ( widget color -- widget )
+FontSize  ( widget float -- widget )
+Padding   ( widget float -- widget )
+```
+
+This means modifiers compose freely, including onto containers that were just closed:
+
+```beef
+VStack(scope () => {
+    Label("A");
+    Label("B");
+}); Padding(8);     // Padding on the VStack
+   TextColor(.Red); // Also on the VStack (but VStack has no TextStyle → error)
+```
+
+Modifiers use `Require<T>` to validate the stack top has the expected component. Applying
+`TextColor` to an `HStack` produces: `"HStack has no TextStyle — TextColor does not apply to it"`.
+
+## Modifier ordering is meaningful
+
+Modifiers execute left-to-right, top-to-bottom. Each one modifies the widget and leaves it on top:
+
+```beef
+Label("Hello");
+FontSize(24);     // sets font size
+TextColor(.Red);  // sets color
+// Widget now has TextStyle { FontSize=24, TextColor=Red }
+```
+
+Modifiers after a container close act on the container:
+
+```beef
+HStack(scope () => {
+    Button("+");
+    Button("-");
+}); Spacing(4);    // ← acts on the HStack widget
+   Padding(8);     // ← acts on the HStack widget
+```
+
+## Pen blocks
+
+Pen blocks are a **modifier sub-vocabulary** for styling. They open a "pen" on the stack that
+collects properties, then apply them all at once when closed:
+
+```beef
+Button("Submit");
+Background(scope () => {
+    Fill(.Blue);
+    Radius(6);
+});
+Border(scope () => {
+    Stroke(.White);
+    StrokeWidth(2);
+    Radius(6);
+});
+```
+
+### How pens work
+
+A pen block uses the same paired-primitive pattern as containers:
+
+1. `_Interior()` pushes a new `Interior` component as a "pen" onto the stack
+2. Pen property words (`Fill`, `Radius`, `Stroke`, `StrokeWidth`) modify the pen on top
+3. `Interior_()` pops the pen, attaches it to the widget below it (via `ClosePen`), and pops
+   the pen from the stack
+
+The stack effect is:
+
+```
+_Interior   ( widget -- widget pen )
+Fill        ( widget pen color -- widget pen )
+Radius      ( widget pen float -- widget pen )
+Interior_   ( widget pen -- widget )
+```
+
+### Pen property words
+
+| Word | Pen type | Sets |
+|---|---|---|
+| `Fill(Color)` | Interior | Background fill color |
+| `Radius(float)` | Interior, Boundary | Corner radius |
+| `Stroke(Color)` | Boundary | Border stroke color |
+| `StrokeWidth(float)` | Boundary | Border stroke width |
+
+### Delegate sugar
+
+Like containers, pens have delegate-block sugar:
+
+```beef
+Background(scope () => { Fill(.Red); Radius(8); });
+// equivalent to:
+_Interior(); Fill(.Red); Radius(8); Interior_();
+```
+
+## Get-or-create pattern
+
+Many modifier words follow a **get-or-create** pattern:
+
+```beef
+public static void OnClick(ClickHandler handler)
+{
+    let widget = Top("OnClick");
+    var clickable = widget.Get<Clickable>();
+    if (clickable == null)
+    {
+        clickable = new:BuildAlloc Clickable();
+        widget.Attach(clickable);
+    }
+    clickable.Handler = handler;
+}
+```
+
+This ensures a modifier works whether it's the first or Nth one on a widget; no ordering
+dependency between modifiers that set properties on the same component.

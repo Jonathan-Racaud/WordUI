@@ -1,0 +1,102 @@
+---
+title: Factoring Words
+description: Tier 1 — compose existing words into a new named word with zero classes
+---
+
+The 90% case: create a new "widget" by factoring a sequence of existing words into a named
+method. This is Factor-style factoring and PFUI's core payoff — zero parameter plumbing,
+zero classes, and the resulting word is indistinguishable from built-in vocabulary. The goal
+is to make factoring so cheap that you reach for it instinctively.
+
+## The pattern
+
+```beef
+using static PFUI.UI;
+
+static class Words
+{
+    public static void TitleLabel(StringView text)
+    {
+        Label(text);
+        FontSize(24);
+        TextColor(.White);
+    }
+}
+
+// Bring your words into scope alongside framework words
+using static PFUI.Words;
+
+// Now indistinguishable from built-in vocabulary
+VStack(scope () => {
+    TitleLabel("Counter"); Center();
+});
+```
+
+That's it. `TitleLabel` is just a `static void` method in an `extension UI` block (or a plain
+static class, since `using static` works either way). Because it runs during `Build()`, it
+has access to the implicit widget stack and every framework word.
+
+## Why extensions work across projects
+
+Beef `extension` methods on a class work across project boundaries. An app in a different
+project can define:
+
+```beef
+namespace MyApp;
+
+extension UI
+{
+    public static void DangerButton(StringView text)
+    {
+        Button(text);
+        Background(scope () => { Fill(.Red); Radius(6); });
+        TextColor(.White);
+    }
+}
+```
+
+Then `using static MyApp.UI;` makes `DangerButton("Delete")` available alongside every PFUI
+word. No fork of the framework, no registration step; just a static method.
+
+## Composition
+
+Factored words compose with modifiers just like built-in words:
+
+```beef
+TitleLabel("Hello");
+TextColor(.Blue);   // overrides the White default
+FontSize(32);       // overrides the 24 default
+```
+
+Because modifiers act on the stack top (Rule B), they see whatever widget the factored word
+left there — a plain `Label` in this case. Modifiers after a factored word override the
+defaults set inside it.
+
+## When to factor
+
+Factor when a sequence of words appears more than once. Factor when a concept has a name.
+Factor when a default style should be applied consistently.
+
+```beef
+// Before: repeated styling
+Button("Save"); Background(scope () => { Fill(.Green); Radius(6); });
+Button("Delete"); Background(scope () => { Fill(.Red); Radius(6); });
+Button("Cancel"); Background(scope () => { Fill(.Gray); Radius(6); });
+
+// After: factored into intent-revealing words
+static class Buttons
+{
+    public static void SaveButton(StringView text)   { Button(text); Background(scope () => { Fill(.Green); Radius(6); }); }
+    public static void DangerButton(StringView text)  { Button(text); Background(scope () => { Fill(.Red); Radius(6); }); }
+    public static void MutedButton(StringView text)   { Button(text); Background(scope () => { Fill(.Gray); Radius(6); }); }
+}
+```
+
+## What you can't do in a factored word
+
+- **Return values** — words are `void`. Data flows through the stack.
+- **Control flow that spans words** — `if`/`for` inside a word affects only that word's body.
+  The paired-primitive pattern (`_VStack()` / `VStack_()`) exists for this case.
+- **Change the widget type** — a factored word can only compose existing widget words. For
+  fundamentally new capabilities, use [Tier 2](/guides/custom-components) or
+  [Tier 3](/guides/drawable-primitives).

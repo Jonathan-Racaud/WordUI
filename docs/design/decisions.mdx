@@ -1,0 +1,85 @@
+---
+title: Design Decisions
+description: Locked architecture decisions and the rationale behind them
+---
+
+This page records the **locked decisions** that define PFUI's architecture — the constraints
+that every new feature and API surface must respect. For the full discussion and rejected
+alternatives, see [`DESIGN.md`](https://github.com/vendinois/PFUI/blob/main/DESIGN.md)
+in the repository root.
+
+---
+
+## 1. Modifiers act on the stack top (Rule B)
+
+Always `Button("+"); OnClick(f);`, never `OnClick(f); Button();`.
+
+**Why:** Because a closed container is left on the stack top, modifiers compose onto whole
+containers for free: `...); Padding(8);`. Reversing the order would require modifiers to
+look ahead in the stack, breaking the concatenative model.
+
+---
+
+## 2. Hybrid data passing
+
+The stack form is primitive (`Str("x"); Label();`) and convenience overloads are sugar
+(`Label("x")` ≡ `Str("x"); Label();`). Modifier parameters are always applicative
+(`TextColor(.Red)`).
+
+**Why:** The stack form preserves the concatenative flavor and is the API that word authors
+target. Sugar overloads keep the common case concise. Applicative modifier parameters keep
+the `modifier(value)` syntax readable (stack-based modifiers would be `value; modifier;`).
+
+---
+
+## 3. Delegate blocks for containers
+
+User-facing containers use delegate blocks (`VStack(scope () => { … })`), implemented on top
+of public paired primitives (`_VStack()` / `VStack_()`).
+
+**Why:** The mixin-block alternative doesn't work: Beef evaluates mixin arguments
+eagerly, before the body. Delegate blocks are the cleanest syntax that works. Keeping the
+paired primitives public enables cross-function factoring when a single delegate block isn't
+enough.
+
+---
+
+## 4. Rebuild-on-invalidate
+
+`Build()` re-runs only after `Invalidate()`. Each run produces a fresh tree in a
+`BumpAllocator` arena; the old tree is freed wholesale. State is plain Beef fields;
+reactivity is `Invalidate()`. No diffing.
+
+**Why:** Simplicity and correctness by construction. Diffing introduces a
+whole class of bugs (stale references, missed updates). Whole-tree rebuild is the right
+default for an experimental framework; memoization and `Model<T>` observables are earmarked
+for optimization only if profiling proves them necessary.
+
+---
+
+## 5. One widget class + component composition
+
+`Widget` is `sealed`; the no-subclassing rule is compiler-enforced. Capabilities are
+`Component` objects in a bag. The single inheritance point is `Component`, one level deep.
+
+**Why:** Rebuild-on-invalidate makes widgets transient descriptions, not long-lived actors.
+Behavior polymorphism moves to `Component` (inheritance for behavior hooks, one level).
+Capability mixing is composition (bags handle combinatorial combinations that subclass trees
+can't). Framework components and user components are peers; same virtual hooks, no
+registration.
+
+---
+
+## 6. Direct SDL3 now; renderer/platform abstraction deferred
+
+The framework uses SDL3 directly while the concatenative model is being validated — this is
+purely about testing the thesis first and extracting the abstraction later. Drawing
+flows through one concrete `Painter` module; `SDL_Event` is adapted to `InputEvent` at a
+single boundary.
+
+**Why:** The thesis under test is "can concatenative-style UI work for real apps?"; answered
+entirely on the framework side (words, layout, composition), where the backend's identity is
+irrelevant. A one-implementation abstraction is best **extracted** from working code later
+than **designed** blind now. The localization discipline (single `Painter` class, single
+event-adapter boundary) makes the eventual extraction a mechanical refactor rather than a
+rewrite.

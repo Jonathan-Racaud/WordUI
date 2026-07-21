@@ -1,0 +1,142 @@
+---
+title: State Management
+description: Patterns for plain Beef fields, Invalidate(), and the arena lifecycle
+---
+
+PFUI uses **rebuild-on-invalidate**: plain Beef fields are the persistent state, `Build()`
+describes the UI as a function of that state, and `Invalidate()` triggers a fresh widget tree.
+There is no `Model<T>`, no `Bind`, no observable system — state is plain fields, reactivity is
+`Invalidate()`. This is intentionally simple; it's the right default for an experimental
+framework and easy to debug.
+
+## The core loop
+
+```
+State (Beef fields)
+    │
+    ▼
+Build()  ──►  word sequence  ──►  widget tree (BumpAllocator arena)
+    │                                    │
+    │                                    ▼
+    │                              Layout pass  ──►  Rects
+    │                                    │
+    │                                    ▼
+    │                              Paint pass  ──►  Pixels on screen
+    │
+    ▼
+User clicks, handler calls Invalidate()
+    │
+    └── back to top ──┘
+```
+
+## The canonical pattern
+
+```beef
+class CounterSDLApp : SDLApp
+{
+    int mCount;                              // ← persistent state
+
+    protected override void Build()
+    {
+        VStack(scope () => {
+            Label(scope:: $"Count: {mCount}"); // ← read state
+            Button("+"); OnClick(new => Increment);
+        });
+    }
+
+    void Increment()
+    {
+        mCount++;       // ← mutate state
+        Invalidate();   // ← trigger rebuild
+    }
+}
+```
+
+## What survives a rebuild
+
+**Plain Beef fields on your App subclass survive.** Everything allocated via `new:BuildAlloc`
+during `Build()` (widgets, components, lists, string copies) dies when the arena is deleted
+on the next rebuild.
+
+| Survives | Dies on rebuild |
+|---|---|
+| `int mCount` | Every `Widget` |
+| `List<String> mItems` | Every `Component` |
+| `String mName` | `Children` lists |
+| Any field on your App class | Arena-copied strings (`new:BuildAlloc String(...)`) |
+
+## Lists and collections
+
+Collections stored as App fields are the standard pattern for dynamic lists:
+
+```beef
+class CounterSDLApp : SDLApp
+{
+    List<String> mItems = new .() ~ DeleteContainerAndItems!(_);
+
+    public this()
+    {
+        mItems.Add(new String("alpha"));
+        mItems.Add(new String("beta"));
+        mItems.Add(new String("gamma"));
+    }
+
+    protected override void Build()
+    {
+        VStack(scope () => {
+            for (let item in mItems)
+            {
+                Label(item); Key(@item.Index);
+            }
+        });
+    }
+}
+```
+
+The `Key(@item.Index)` gives each dynamic child a stable identity, essential for the M4
+persistent-state side table (scroll position, etc.).
+
+## When to call Invalidate()
+
+Call `Invalidate()` whenever state that affects the UI changes:
+
+- After a click handler mutates a field ✅
+- After adding/removing an item from a list ✅
+- After a timer fires ✅
+
+Do **not** call `Invalidate()` inside `Build()`; that would cause an infinite loop.
+
+The framework batches invalidations: calling `Invalidate()` multiple times between frames
+only triggers one rebuild.
+
+## Avoiding stale closures
+
+Beef delegate closures capture variables by reference. This is usually what you want:
+
+```beef
+// ✅ mCount is captured by reference — the handler reads the current value
+Button("+"); OnClick(new () => { mCount++; Invalidate(); });
+```
+
+But be careful with loop variables:
+
+```beef
+// ❌ All handlers capture the same `item` reference — they all see the last item
+for (let item in mItems)
+{
+    Button(item); OnClick(new () => { Select(item); });  // BUG!
+}
+
+// ✅ Copy to a local that won't change
+for (let item in mItems)
+{
+    let captured = item;
+    Button(captured); OnClick(new () => { Select(captured); });
+}
+```
+
+## No observers (yet)
+
+Observer-based granular updates (`Model<T>`, `Bind`) are earmarked for optimization only if
+whole-tree rebuild proves too slow in real apps — to be measured, not assumed. The current
+model is simple and easy to reason about; no point adding complexity before it's needed.

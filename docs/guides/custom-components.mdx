@@ -1,0 +1,119 @@
+---
+title: Custom Components
+description: Tier 2 — subclass Component and provide a get-or-create modifier word
+---
+
+When existing components don't cover your needs, create a new `Component` subclass and a
+modifier word that attaches it on demand. This works on **any widget**, in your own project,
+without touching the framework — the same extension mechanism that powers the whole word
+vocabulary.
+
+## The pattern
+
+Every behavior component follows the same three-part pattern:
+
+1. **A `Component` subclass** with the data and hooks you need
+2. **A modifier word** that get-or-creates your component on the stack-top widget
+3. **`using static`** to bring your word into scope
+
+The canonical example is `Clickable` from the framework itself:
+
+### 1. The component
+
+```beef
+// src/Components/Clickable.bf
+public delegate void ClickHandler();
+
+public class Clickable : Component
+{
+    public ClickHandler Handler;
+}
+```
+
+Minimal; just data. For components that participate in layout or rendering, override the
+virtual hooks (`Measure`, `Draw*`).
+
+### 2. The modifier word
+
+```beef
+// src/Handlers/OnClick.bf
+extension UI
+{
+    public static void OnClick(ClickHandler h)
+    {
+        let w = Top("OnClick");
+        var c = w.Get<Clickable>();
+        if (c == null)
+        {
+            c = new:BuildAlloc Clickable();
+            w.Attach(c);
+        }
+        RegisterHandler(h);
+        c.Handler = h;
+    }
+}
+```
+
+Key points:
+- `Top("OnClick")` gets the stack-top widget with error checking
+- `Get<T>()` checks if the component already exists
+- If null, allocate via `new:BuildAlloc` and `Attach`
+- Apply the modifier's payload (here: the handler)
+
+### 3. Usage
+
+```beef
+Button("Submit"); OnClick(new => SubmitForm);
+```
+
+## A worked example: Tooltip
+
+```beef
+// MyApp/TooltipComponent.bf
+public class Tooltip : Component
+{
+    public String TooltipText;
+}
+
+// MyApp/TooltipWord.bf
+namespace MyApp;
+
+extension UI
+{
+    public static void Tooltip(StringView text)
+    {
+        let w = Top("Tooltip");
+        var t = w.Get<Tooltip>();
+        if (t == null)
+        {
+            t = new:BuildAlloc Tooltip();
+            w.Attach(t);
+        }
+        t.TooltipText = new:BuildAlloc String(text);
+    }
+}
+
+// Usage
+using static MyApp.UI;
+Button("?"); Tooltip("Click for help");
+```
+
+## The get-or-create rule
+
+Always use `Get<T>()` first and create only if null. This ensures:
+
+- Multiple modifiers on the same widget share one component
+- No ordering dependency; `Tooltip("x"); OnClick(f);` and `OnClick(f); Tooltip("x");` both work
+- `Attach`'s duplicate-detection doesn't fire
+
+## When to use Tier 2 vs Tier 1
+
+| Tier 1 (factored word) | Tier 2 (new component) |
+|---|---|
+| Compose existing words | New data that existing components don't hold |
+| Zero classes | One `Component` subclass + one modifier word |
+| Applies a preset style/behavior | Adds a new capability to any widget |
+| Example: `TitleLabel(text)` | Example: `OnClick(handler)` |
+
+If you find yourself wanting to attach data to a widget that no existing component stores, you
+need Tier 2. If you're just composing existing words into a named sequence, stay at Tier 1.

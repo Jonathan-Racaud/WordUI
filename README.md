@@ -4,8 +4,7 @@ An experimental UI framework for [Beef](https://www.beeflang.org/) that captures
 essence of **concatenative programming** — inspired by [Factor](https://factorcode.org/)'s
 UI vocabulary — inside an applicative language, without building an interpreter.
 
-UI is a sequence of **words** operating on an implicit widget stack. Modifiers act on the
-stack top; any run of words factors into a new word with zero parameter plumbing:
+UI is a sequence of **words** operating on an implicit widget stack:
 
 ```beef
 using static PFUI.UI;
@@ -16,38 +15,32 @@ VStack(scope () => {
         Button("+"); OnClick(increment);
         Spacer();
         Button("-"); OnClick(decrement);
-    }); Spacing(4);      // modifies the HStack
-}); Padding(8);          // modifies the VStack
+    }); Spacing(4);
+}); Padding(8);
 ```
-
-Widgets are a single sealed class composed of **components** (capabilities); new widgets
-are created by factoring words, not by subclassing. State management is
-rebuild-on-invalidate: plain fields + `Invalidate()`, with each build allocated in a bump
-arena. Rendering will be fully custom (Flutter-style, no native widgets); the current
-prototype stops at tree construction and uses a console dump as the stand-in renderer.
-
-## Status
-
-Early experiment. Working today: the word vocabulary (Label, Button, HStack/VStack,
-Spacer + modifiers and OnClick), runtime stack diagnostics, and the
-build → invalidate → rebuild cycle. Layout, rendering, input, and animations are future
-phases.
-
-## Build & run
-
-Requires the Beef toolchain (`BeefBuild`).
-
-```sh
-BeefBuild                          # build (from the workspace root)
-./build/Debug_Linux64/PFUI/PFUI    # run the counter demo (console tree dump)
-```
-
-Diagnostics demos: `--test-mismatch` (mismatched container close), `--test-unbalanced`
-(missing close word), `--test-leftover` (unconsumed stack values).
 
 ## Documentation
 
-- [`DESIGN.md`](DESIGN.md) — architecture, locked decisions, and rationale. Read this
-  before proposing API changes.
-- [`plans/`](plans/) — per-session plans and brainstorming summaries, including the
-  paths explored and rejected.
+Canonical documentation lives in [`docs/`](docs/):
+
+| | |
+|---|---|
+| [Getting Started](docs/getting-started.mdx) | Build, run, your first app |
+| [Concepts](docs/concepts/concatenative-model.mdx) | Words, stack, widget model, rebuild |
+| [API Reference](docs/api/) | Every word with stack effects |
+| [Guides](docs/guides/) | Authoring custom widgets and components |
+| [Design Decisions](docs/design/decisions.mdx) | Locked architecture and rationale |
+| [Roadmap](docs/roadmap.mdx) | Milestone status |
+
+- [`DESIGN.md`](DESIGN.md) — architecture source of truth (points to `docs/` for expanded treatment)
+- [`plans/`](plans/) — per-session planning and brainstorming
+
+## Build & run
+
+```sh
+BeefBuild
+./build/Debug_Linux64/PFUI/PFUI
+```
+
+Status: early experiment — word vocabulary, modifiers, styling, SDL3 rendering, hit-test, and
+click dispatch all working. Interaction states, scroll, and text input upcoming.

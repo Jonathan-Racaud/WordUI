@@ -1,0 +1,113 @@
+---
+title: Core Ops
+description: The core-operation API — stack manipulation, widget construction, containers, pens, handlers, and failure
+---
+
+The `UI` class in `src/Core/UI.bf` holds the thread-local widget stack and the **core-op API** —
+the primitive operations that every word, framework or user-defined, is built from.
+They are public on purpose: they are the documented extender surface, and the goal is to propose
+a complete, inspectable foundation that word authors can rely on without reaching into internals.
+
+## Stack operations
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `Push(item)` | `( -- item )` | Push a `StackItem` onto the stack |
+| `PopStr(word)` | `( string -- )` | Pop and return a string, or fail naming `word` |
+| `PopInt(word)` | `( int -- )` | Pop and return an int |
+| `PopFloat(word)` | `( float -- )` | Pop and return a float |
+| `PopDouble(word)` | `( double -- )` | Pop and return a double |
+| `PopBool(word)` | `( bool -- )` | Pop and return a bool |
+| `PopWidget(word)` | `( widget -- )` | Pop and return a `Widget` |
+| `PopPen(word)` | `( pen -- )` | Pop and return a pen `Component` |
+| `Top(word)` | `( widget -- widget )` | Peek the top widget without popping; fails if top isn't a widget |
+| `TopPen(word)` | `( pen -- pen )` | Peek the top pen; fails if top isn't a pen |
+
+Every `Pop*` and `Top*` method takes a `StringView word` parameter, the name of the calling word.
+On failure (wrong type, empty stack), it prints the word name, the expected type, a stack dump,
+and calls `Runtime.FatalError`.
+
+## Widget construction
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `NewWidget(name)` | `( -- widget )` | Allocate a fresh `Widget` in the build arena, push it, and return it |
+| `Attach(component)` | `( widget component -- widget )` | Attach a component to the stack-top widget (rejects duplicates) |
+| `ReplaceComponent(component)` | `( widget component -- widget )` | Replace an existing component of compatible type on the stack-top widget |
+
+`NewWidget` returns the widget as a convenience for applicative style:
+```beef
+let w = NewWidget("Custom");
+w.Attach(new:BuildAlloc ...);
+```
+
+## Containers
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `OpenContainer(name)` | `( -- mark )` | Push a named marker onto the stack |
+| `CloseContainer(name)` | `( mark child* container -- container )` | Pop the container, collect all children back to the matching marker, attach a `Children` component, re-push the container |
+
+`CloseContainer` validates that the marker name matches; a mismatch produces a named error.
+Any unconsumed stack items between the marker and container also trigger errors.
+
+Example (the `VStack_` closing word):
+```beef
+public static void VStack_()
+{
+    NewWidget("VStack");
+    Attach(new:BuildAlloc StackLayout() { Axis = .Vertical });
+    CloseContainer("VStack");
+}
+```
+
+## Pens
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `PushPen(pen)` | `( -- pen )` | Push a pen `Component` onto the stack |
+| `ClosePen(name)` | `( ... marker widget pen -- ... widget )` | Pop the pen, find and remove the matching marker, return the pen (caller attaches it) |
+
+Pens use the same marker mechanism as containers. The closing word pops the pen, validates it,
+and calls `ReplaceComponent` to attach it to the widget below.
+
+## Handlers
+
+| Word | Description |
+|---|---|
+| `RegisterHandler(h)` | Register a `ClickHandler` for the current build. Framework takes ownership; the framework frees handlers on the next rebuild. |
+
+Handlers only ever dispatch against the current tree, so this lifetime is safe.
+
+## Build lifecycle
+
+| Word | Description |
+|---|---|
+| `BeginBuild(arena, handlers)` | Initialize the stack and build arena. Called by `App.RebuildIfNeeded()`. |
+| `EndBuild()` | Validate the stack has exactly 1 root widget, pop and return it. Called by `App.RebuildIfNeeded()`. |
+| `BuildAlloc` | The `BumpAllocator` for the current build. Valid only between `BeginBuild` and `EndBuild`. Use `new:BuildAlloc` for all allocations during `Build()`. |
+
+## Failure
+
+| Word | Description |
+|---|---|
+| `Fail(word, msg)` | Print error with word name and message, dump the stack, call `Runtime.FatalError`. `[NoReturn]`. |
+
+All type-mismatch and stack-underflow errors route through `Fail`, so every PFUI error includes
+a named word and a stack dump.
+
+## Data primitives
+
+From `src/Core/Primitives.bf`:
+
+| Word | Stack effect | Description |
+|---|---|---|
+| `PushStr(s)` / `Str(s)` | `( -- string )` | Push an arena-copied string |
+| `PushInt(v)` / `Number(int v)` | `( -- int )` | Push an int |
+| `PushFloat(v)` / `Number(float v)` | `( -- float )` | Push a float |
+| `PushDouble(v)` / `Number(double v)` | `( -- double )` | Push a double |
+| `PushBool(v)` / `Bool(v)` | `( -- bool )` | Push a bool |
+
+The `Push*` names are the canonical words. `Str`, `Number`, and `Bool` are friendly aliases.
+`Int(...)` and `Float(...)` are **impossible**: those are corlib struct names, and type
+constructors win resolution over `using static` methods.
