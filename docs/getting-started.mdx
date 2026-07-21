@@ -19,8 +19,8 @@ BeefBuild
 ```
 
 The counter demo opens an SDL3 window with a centered title label, `+`/`-` buttons in a
-horizontal stack, and a dynamic count display. Clicking the buttons updates the count via
-`Invalidate()` → rebuild → repaint.
+horizontal stack, and a dynamic count display. The `+` button highlights on press via
+`IfPressed`. Clicking the buttons updates the count via `Invalidate()` → rebuild → repaint.
 
 ## Diagnostics flags
 
@@ -63,7 +63,7 @@ class HelloApp : SDLApp
 }
 ```
 
-The key pattern, which is intentionally simple so as to propose a low-friction starting point:
+The key pattern, intentionally simple:
 
 - **State lives in plain Beef fields** (`mCount`).
 - **`Build()` describes the UI** as a function of that state: a sequence of words.
@@ -74,11 +74,13 @@ The key pattern, which is intentionally simple so as to propose a low-friction s
 
 ```
 src/
-├── Core/          # Foundation: Widget, App, UI (stack + ops), Component, Color, ...
-├── Components/    # Capability types: Clickable, StackLayout, TextStyle, ...
+├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, PressTracker, InputEvent, Rect, Size, Color, Primitives
+├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout
+├── Properties/    # Pure data: TextStyleProperty, LayoutHint (+ CrossAlignment, SizingConstraints), PressState (+ IInteractionState)
+├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler)
 ├── Widgets/       # Word definitions: Label, Button, Stack, Spacer
-├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment
-├── Handlers/      # Event words: OnClick
+├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment, Sizing, Styling (pen blocks)
+├── Handlers/      # Event words: OnClick (get-or-create OnClickBehavior)
 ├── Diagnostics/   # Diagnostics words: PrintStack, DumpTree
 └── Program.bf     # Entry point, counter demo, negative-test harnesses
 ```
@@ -86,5 +88,6 @@ src/
 ## Next steps
 
 - Read [the concatenative model](/concepts/concatenative-model) to understand words and the stack
+- Read [the widget model](/concepts/widget-model) for the three-bag architecture
 - Browse the [API reference](/api/widgets) for all available words
 - Follow the [factoring words guide](/guides/factoring-words) to create your own widgets

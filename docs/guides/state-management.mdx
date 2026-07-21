@@ -1,6 +1,6 @@
 ---
 title: State Management
-description: Patterns for plain Beef fields, Invalidate(), and the arena lifecycle
+description: Patterns for plain Beef fields, Invalidate(), interaction states, and the arena lifecycle
 ---
 
 WordUI uses **rebuild-on-invalidate**: plain Beef fields are the persistent state, `Build()`
@@ -40,7 +40,13 @@ class CounterSDLApp : SDLApp
     {
         VStack(scope () => {
             Label(scope:: $"Count: {mCount}"); // ← read state
-            Button("+"); OnClick(new => Increment);
+            Button("+"); {
+                TextColor(.White);
+                IfPressed(scope () => {
+                    Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+                });
+                OnClick(new => Increment);
+            }
         });
     }
 
@@ -52,18 +58,40 @@ class CounterSDLApp : SDLApp
 }
 ```
 
+## Interaction state: IfPressed
+
+`IfPressed` provides visual feedback during press without a separate repaint. It runs inline
+during `Build()` — the body executes only when `PressTracker.IsPressed(buildIndex)` is true,
+which is the case during the rebuild that immediately follows a mouse-down event. When the
+mouse is released and a second rebuild runs, `IsPressed` is false, the body doesn't run, and
+the widget renders its default appearance.
+
+The interaction cycle:
+
+1. User presses mouse-down on a button → `PressTracker` records the pressed widget
+2. `Invalidate()` → `Build()` runs → `IfPressed` body executes (highlight appears)
+3. Layout + paint pass runs → highlighted button is drawn
+4. User releases mouse → `PressTracker` fires `OnClick` handler → handler calls `Invalidate()`
+5. `Build()` runs again → `IfPressed` body does NOT execute (press is over)
+6. Layout + paint pass runs → button returns to default appearance
+
+No separate repaint pass needed. The highlight is just another build, same as any state
+change.
+
 ## What survives a rebuild
 
 **Plain Beef fields on your App subclass survive.** Everything allocated via `new:BuildAlloc`
-during `Build()` (widgets, components, lists, string copies) dies when the arena is deleted
-on the next rebuild.
+during `Build()` (widgets, components, properties, behaviors, lists, string copies) dies
+when the arena is deleted on the next rebuild.
 
 | Survives | Dies on rebuild |
 |---|---|
 | `int mCount` | Every `Widget` |
 | `List<String> mItems` | Every `Component` |
-| `String mName` | `Children` lists |
-| Any field on your App class | Arena-copied strings (`new:BuildAlloc String(...)`) |
+| `String mName` | Every `Property` |
+| Any field on your App class | Every `Behavior` |
+| | `Children` lists |
+| | Arena-copied strings (`new:BuildAlloc String(...)`) |
 
 ## Lists and collections
 

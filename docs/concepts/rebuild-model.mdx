@@ -111,9 +111,15 @@ If whole-tree rebuild ever proves too slow (to be measured, not assumed), the gr
 Both are earmarked for far-future optimization; the current model is the right default for
 an experimental framework — no point optimizing what hasn't been measured slow.
 
-## Repaint vs rebuild (M3+)
+## Interaction state without repaint (M3)
 
-Currently, every `Invalidate()` triggers a full rebuild + layout + paint. M3 will introduce
-a **repaint-vs-rebuild split**: hover highlights and other visual-only changes will trigger
-a repaint (re-run the paint pass on the existing tree) without a rebuild. This is the first
-point where the existing tree survives across frames.
+Press-state highlighting is handled inline during `Build()` via `IfPressed` — the
+`PressTracker` state is queried during the normal build cycle, and the highlight body runs
+or doesn't run based on the current press state. No separate repaint pass is needed for
+press feedback; it's just another build triggered by the mouse-down event.
+
+The remaining M3 work is **hover states**, which will require a genuine
+**repaint-vs-rebuild split**: hover must not trigger a full tree rebuild because it
+happens on every mouse-move. M3 will introduce a repaint path (re-run the paint pass on
+the existing tree) for interaction-only visual changes. This is the first point where the
+existing tree survives across frames.

@@ -5,7 +5,7 @@ description: Tier 3 — a Component with Measure/Draw overrides for custom rende
 
 For custom rendering, subclass `Component` and override its virtual hooks. This is the rare
 case; most widgets are factored words (Tier 1), not new drawable primitives. The goal is to
-propose an escape hatch for pixel-level drawing without forcing every widget author to learn
+provide an escape hatch for pixel-level drawing without forcing every widget author to learn
 a renderer abstraction.
 
 ## The Component hooks
@@ -16,20 +16,24 @@ a renderer abstraction.
 public abstract class Component
 {
     public virtual void Describe(String str) { }
-    public virtual void Measure(Size available) { }
-    public virtual void DrawBackground(Painter painter, Rect rect) { }
-    public virtual void DrawContent(Painter painter, Rect rect) { }
-    public virtual void DrawOverlay(Painter painter, Rect rect) { }
+    public virtual Size Measure(Size constraint) { ... }
+    public virtual void DrawBackground(Painter painter, Widget widget, Rect rect) { }
+    public virtual void DrawContent(Painter painter, Widget widget, Rect rect) { }
+    public virtual void DrawOverlay(Painter painter, Widget widget, Rect rect) { }
 }
 ```
 
 | Hook | Called by | Purpose |
 |---|---|---|
 | `Describe` | `TreeDump` | Human-readable description string |
-| `Measure` | Layout pass | Return intrinsic size (sets `mMeasured`) |
+| `Measure` | Layout pass | Return intrinsic size |
 | `DrawBackground` | Paint pass (z-order: back) | Fill, background color |
 | `DrawContent` | Paint pass (z-order: middle) | Text, custom drawing |
 | `DrawOverlay` | Paint pass (z-order: front) | Borders, debug overlays |
+
+Note that `Measure` and the `Draw*` hooks receive the `Widget` in addition to `Painter` and
+`Rect` — this lets your component query the widget's Property bag for styling data (e.g.
+`TextComponent` reads `TextStyleProperty` for color).
 
 ## A minimal drawable: filled rectangle
 
@@ -38,19 +42,19 @@ public class FilledRect : Component
 {
     public Color FillColor = .White;
 
-    public override void DrawBackground(Painter painter, Rect rect)
+    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
     {
-        painter.FillRect(rect, FillColor);
+        painter.FillRect(bounds, FillColor);
     }
 
-    public override void Describe(String str)
+    public override void Describe(String buf)
     {
-        str.AppendF($"fill={FillColor}");
+        buf.AppendF($"fill={FillColor}");
     }
 }
 ```
 
-Then a modifier word to make it usable:
+Then a word to make it usable:
 
 ```beef
 extension UI
@@ -58,8 +62,7 @@ extension UI
     public static void FilledRect(Color c)
     {
         NewWidget("FilledRect");
-        let comp = new:BuildAlloc FilledRect() { FillColor = c };
-        Attach(comp);
+        AttachComponent(new:BuildAlloc FilledRect() { FillColor = c });
     }
 }
 ```
@@ -73,23 +76,23 @@ public class ProgressBar : Component
     public Color FillColor = .Blue;
     public Color TrackColor = .(60, 60, 60, 255);
 
-    public override void DrawBackground(Painter painter, Rect rect)
+    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
     {
         // Track (full width, grey)
-        painter.FillRoundRect(rect, TrackColor, 4);
+        painter.FillRoundRect(bounds, 4, TrackColor);
     }
 
-    public override void DrawOverlay(Painter painter, Rect rect)
+    public override void DrawOverlay(Painter painter, Widget widget, Rect bounds)
     {
         // Fill (proportional width, colored)
-        float fillWidth = rect.Width * Progress;
-        let fillRect = Rect(rect.X, rect.Y, fillWidth, rect.Height);
-        painter.FillRoundRect(fillRect, FillColor, 4);
+        float fillWidth = bounds.Width * Progress;
+        let fillRect = Rect(bounds.X, bounds.Y, fillWidth, bounds.Height);
+        painter.FillRoundRect(fillRect, 4, FillColor);
     }
 
-    public override void Describe(String str)
+    public override void Describe(String buf)
     {
-        str.AppendF($"progress={Progress * 100}%");
+        buf.AppendF($"progress={Progress * 100}%");
     }
 }
 
@@ -98,7 +101,7 @@ extension UI
     public static void ProgressBar(float progress)
     {
         NewWidget("ProgressBar");
-        Attach(new:BuildAlloc ProgressBar() { Progress = progress });
+        AttachComponent(new:BuildAlloc ProgressBar() { Progress = progress });
     }
 }
 ```
@@ -111,6 +114,24 @@ VStack(scope () => {
 });
 ```
 
+## Querying the Property bag from a Component
+
+Your `Component` can read the widget's Property bag for styling data. The framework's
+`TextComponent` does this:
+
+```beef
+public override void DrawContent(Painter painter, Widget widget, Rect bounds)
+{
+    var ts = widget.GetProperty<TextStyleProperty>();
+    Color color = ts != null ? ts.TextColor : .Black;
+    painter.DrawText(Content, bounds.X, bounds.Y, color);
+}
+```
+
+This pattern lets your drawable primitive respect modifier words: a user who writes
+`ProgressBar(0.5f); TextColor(.Green);` gets a green progress bar if your `DrawOverlay`
+reads `TextStyleProperty` for its fill color.
+
 ## The Painter API
 
 The `Painter` class (in `src/Core/Painter.bf`) wraps SDL3 rendering:
@@ -118,9 +139,9 @@ The `Painter` class (in `src/Core/Painter.bf`) wraps SDL3 rendering:
 | Method | Description |
 |---|---|
 | `FillRect(Rect, Color)` | Filled rectangle |
-| `FillRoundRect(Rect, Color, float radius)` | Filled rounded rectangle |
+| `FillRoundRect(Rect, float radius, Color)` | Filled rounded rectangle |
 | `DrawRect(Rect, Color)` | Rectangle outline |
-| `DrawRoundRect(Rect, Color, float radius)` | Rounded rectangle outline |
+| `DrawRoundRect(Rect, float radius, float width, Color)` | Rounded rectangle outline |
 | `DrawText(StringView, float x, float y, Color)` | Render text (uses active TTF font) |
 | `MeasureText(StringView)` | Get pixel size of text |
 
@@ -130,8 +151,8 @@ working code.
 
 ## When to use Tier 3
 
-- You need custom pixel drawing that existing components (TextStyle, Interior, Boundary)
-  don't cover
+- You need custom pixel drawing that existing components (`TextComponent`, `Interior`,
+  `Boundary`) don't cover
 - You need to combine background and overlay drawing in a specific way
 - You're building a completely new visual primitive (progress bar, slider track, chart)
 

@@ -3,10 +3,9 @@ title: Handlers
 description: Event handler words — OnClick and the ClickHandler delegate
 ---
 
-Event handler words attach behavior to widgets using the **get-or-create pattern**:
-if the widget already has the required component, reuse it; otherwise, create and attach a new one.
-This is how WordUI propose interactivity — not through widget subclasses, but through
-components that any word can attach to any widget.
+Event handler words attach behavior to widgets using the **get-or-create pattern** on the
+Behavior bag. This is how WordUI does interactivity — not through widget subclasses, but
+through `Behavior` objects that any word can attach to any widget.
 
 ## OnClick
 
@@ -18,8 +17,8 @@ components that any word can attach to any widget.
 Button("+"); OnClick(new => Increment);
 ```
 
-Attaches a `Clickable` component to the stack-top widget (creating one if absent) and
-registers the handler. Makes any widget clickable; no `ClickableButton` class ever needs
+Attaches an `OnClickBehavior` to the stack-top widget's Behavior bag (creating one if absent)
+and registers the handler. Makes any widget clickable; no `ClickableButton` class ever needs
 to exist.
 
 ### ClickHandler delegate
@@ -53,7 +52,7 @@ class CounterSDLApp : SDLApp
 
 1. SDL mouse-up event arrives at `SDLApp`'s event loop
 2. `PressTracker` checks: was the mouse-down and mouse-up on the same widget?
-3. If yes, it finds the widget's `Clickable` component and calls its `Handler`
+3. If yes, it walks the hit-test chain, finds each widget's `OnClickBehavior`, and fires its `Handler`
 4. The handler runs user code (e.g. `mCount++`)
 5. The handler calls `Invalidate()` to trigger a rebuild
 
@@ -63,23 +62,55 @@ Handlers registered via `RegisterHandler` are framework-owned, stored per build 
 on the next rebuild. Events only ever dispatch against the current tree, so a handler
 cannot outlive what it references.
 
-### The get-or-create pattern
+### The get-or-create pattern on the Behavior bag
 
 ```beef
 public static void OnClick(ClickHandler h)
 {
     let w = Top("OnClick");
-    var c = w.Get<Clickable>();
-    if (c == null)
+    var b = w.GetBehavior<OnClickBehavior>();
+    if (b == null)
     {
-        c = new:BuildAlloc Clickable();
-        w.Attach(c);
+        b = new:BuildAlloc OnClickBehavior();
+        w.AttachBehavior(b);
     }
     RegisterHandler(h);
-    c.Handler = h;
+    b.Handler = h;
 }
 ```
 
-This pattern ensures `OnClick` works whether it's the first or Nth modifier on a widget;
-no ordering dependency. It's the standard pattern for any new behavior component you author
-(see [Custom Components](/guides/custom-components)).
+`OnClickBehavior` is a `Behavior` subclass — it lives in the Behavior bag, not the
+Component bag. It has no `Measure`, `Draw*`, or other pipeline hooks; the input system
+iterates the Behavior bag during event dispatch. This is the standard pattern for any
+new event handler you author.
+
+## Authoring a new behavior
+
+The pattern is the same for any event-driven capability:
+
+1. Subclass `Behavior` with your delegate field
+2. Write a modifier word that get-or-creates it on the Behavior bag
+3. Register any framework hooks (like `RegisterHandler`) if needed
+
+```beef
+public class OnHoverBehavior : Behavior
+{
+    public delegate void HoverHandler(bool entered);
+    public HoverHandler Handler;
+}
+
+extension UI
+{
+    public static void OnHover(OnHoverBehavior.HoverHandler h)
+    {
+        let w = Top("OnHover");
+        var b = w.GetBehavior<OnHoverBehavior>();
+        if (b == null)
+        {
+            b = new:BuildAlloc OnHoverBehavior();
+            w.AttachBehavior(b);
+        }
+        b.Handler = h;
+    }
+}
+```

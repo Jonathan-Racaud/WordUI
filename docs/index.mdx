@@ -5,10 +5,10 @@ description: An experimental concatenative UI framework for the Beef programming
 
 WordUI is an experimental UI framework for [Beef](https://www.beeflang.org/) which captures the
 essence of **concatenative programming** — inspired by [Factor](https://factorcode.org/)'s
-UI vocabulary — inside an applicative language, without building an interpreter. The goals
-behind this project is to try and bring Factor-style UI factoring to a statically-typed,
-ahead-of-time compiled language so that widget construction becomes a sequence of **words**
-operating on an implicit stack with zero parameter plumbing.
+UI vocabulary — inside an applicative language, without building an interpreter. The goal
+is to bring Factor-style UI factoring to a statically-typed, ahead-of-time compiled language
+so that widget construction becomes a sequence of **words** operating on an implicit stack
+with zero parameter plumbing.
 
 ```beef
 using static WordUI.UI;
@@ -16,11 +16,17 @@ using static WordUI.UI;
 VStack(scope () => {
     Label("Title"); FontSize(24);
     HStack(scope () => {
-        Button("+"); OnClick(increment);
+        Button("+"); {
+            TextColor(.White);
+            IfPressed(scope () => {
+                Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+            });
+            OnClick(increment);
+        }
         Spacer();
         Button("-"); OnClick(decrement);
-    }); Spacing(4);      // modifies the HStack
-}); Padding(8);          // modifies the VStack
+    }); Spacing(4);
+}); Padding(8);
 ```
 
 What I am tackling is not new and I will reinvent some wheels — that's part of the motivation.
@@ -29,9 +35,14 @@ applications in a language that was never designed for it.
 
 ## Architecture at a glance
 
-- **One sealed `Widget` class**: never subclassed; capabilities are `Component` objects in a bag
-- **Words are `extension UI` methods**: your app defines its own words without touching the framework
-- **Rebuild-on-invalidate**: plain Beef fields + `Invalidate()`; each build allocates in a bump arena
+- **One sealed `Widget` class + three type-safe bags**: `Component` (pipeline participants
+  with `Measure`/`Draw*`), `Property` (pure data), `Behavior` (event handlers)
+- **Words are `extension UI` methods**: your app defines its own words without touching the
+  framework
+- **Rebuild-on-invalidate**: plain Beef fields + `Invalidate()`; each build allocates in a
+  bump arena
+- **IfActive/IfPressed**: interaction-state-driven conditional build inline in the build
+  cycle — no separate repaint needed for press highlights
 - **Direct SDL3 rendering**: drawing flows through one concrete `Painter` module
 
 ## Where to start
@@ -48,6 +59,7 @@ applications in a language that was never designed for it.
 ## Status
 
 Early experiment. Working today: the word vocabulary (Label, Button, HStack/VStack,
-Spacer), modifiers, styling (Background/Border pens), OnClick dispatch,
-flex layout pass, SDL3 rendering with real mouse hit-test → click, and
-runtime stack diagnostics. Interaction states, scroll, and text input are upcoming.
+Spacer), modifiers, styling (Background/Border pens), alignment + sizing constraints,
+OnClick dispatch with real mouse hit-test → click → rebuild → repaint, press-state-driven
+conditional build (IfPressed), and runtime stack diagnostics. Hover states, scroll,
+and text input are upcoming.

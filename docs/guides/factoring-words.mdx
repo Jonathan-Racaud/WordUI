@@ -6,7 +6,7 @@ description: Tier 1 — compose existing words into a new named word with zero c
 The 90% case: create a new "widget" by factoring a sequence of existing words into a named
 method. This is Factor-style factoring and WordUI's core payoff — zero parameter plumbing,
 zero classes, and the resulting word is indistinguishable from built-in vocabulary. The goal
-is to make factoring so cheap that you reach for it instinctively.
+is to make factoring so cheap you reach for it instinctively.
 
 ## The pattern
 
@@ -72,6 +72,23 @@ Because modifiers act on the stack top (Rule B), they see whatever widget the fa
 left there — a plain `Label` in this case. Modifiers after a factored word override the
 defaults set inside it.
 
+## Interaction states in factored words
+
+Factored words can include `IfPressed` for visual feedback:
+
+```beef
+public static void PressableButton(StringView text, ClickHandler onClick)
+{
+    Button(text); {
+        TextColor(.White);
+        IfPressed(scope () => {
+            Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+        });
+        OnClick(onClick);
+    }
+}
+```
+
 ## When to factor
 
 Factor when a sequence of words appears more than once. Factor when a concept has a name.
@@ -98,5 +115,5 @@ static class Buttons
 - **Control flow that spans words** — `if`/`for` inside a word affects only that word's body.
   The paired-primitive pattern (`_VStack()` / `VStack_()`) exists for this case.
 - **Change the widget type** — a factored word can only compose existing widget words. For
-  fundamentally new capabilities, use [Tier 2](/guides/custom-components) or
-  [Tier 3](/guides/drawable-primitives).
+  fundamentally new capabilities, use [Tier 2](/guides/custom-components) (new Component,
+  Property, or Behavior subclass) or [Tier 3](/guides/drawable-primitives) (custom drawable).

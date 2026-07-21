@@ -4,9 +4,9 @@ description: Pen blocks for styling — Background, Border, Fill, Stroke, Radius
 ---
 
 Pen blocks are a modifier sub-vocabulary for styling — they open a "pen" on the stack that
-collects property assignments, then apply them all at once when the block closes. The goal
-is to propose a styling syntax that is readable and composable without introducing a CSS-like
-cascade or a separate style-sheet language.
+collects property assignments, then attach them all at once using `ReplaceComponent`. This
+means re-running a pen block on a widget that already has an `Interior` or `Boundary`
+replaces the old one instead of triggering a duplicate error.
 
 ## Background (Interior pen)
 
@@ -18,10 +18,11 @@ Background(scope () => {
 });
 ```
 
-Uses the paired-primitive pattern:
+Uses the paired-primitive pattern with `ReplaceComponent`:
 - `_Interior()` — pushes a marker, then an `Interior` pen
 - Pen property words modify the pen on top
-- `Interior_()` — pops the pen, finds the marker, attaches the `Interior` to the widget below
+- `Interior_()` — pops the pen, finds the marker, calls `ReplaceComponent` to attach the
+  `Interior` to the widget below (replacing any existing `Interior`)
 
 Stack effect:
 ```
@@ -44,6 +45,7 @@ Border(scope () => {
 
 Same pattern as Background but with `Boundary`:
 - `_Border()` / `Border_()` / `Border(delegate)`
+- Closing calls `ReplaceComponent` to replace any existing `Boundary`
 
 ## Pen property words
 
@@ -97,6 +99,25 @@ Sets the stroke width on an active `Boundary` pen. Must be inside a `Border { }`
 ```beef
 Border(scope () => { Stroke(.Black); StrokeWidth(3); });
 ```
+
+## Replacement semantics
+
+Pen blocks use `ReplaceComponent`, not `AttachComponent`. This is the key difference from
+ordinary modifier words: a second pen block of the same kind replaces the first.
+
+```beef
+// This works: the second Background replaces the first Interior
+Button("Toggle");
+Background(scope () => { Fill(.Blue); Radius(6); });
+Background(scope () => { Fill(.Green); Radius(10); }); // replaces, no error
+
+// This would fail: two TextColor calls mutate the same TextStyleProperty in place
+Label("X"); TextColor(.Red); TextColor(.Blue); // fine — mutates in place
+```
+
+The general rule: pen blocks use replacement semantics (they own their Component slot);
+ordinary modifier words use mutation semantics (they mutate an existing instance in place,
+creating one via get-or-create if absent).
 
 ## Combining pens
 

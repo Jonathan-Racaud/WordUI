@@ -5,8 +5,7 @@ description: The core-operation API — stack manipulation, widget construction,
 
 The `UI` class in `src/Core/UI.bf` holds the thread-local widget stack and the **core-op API** —
 the primitive operations that every word, framework or user-defined, is built from.
-They are public on purpose: they are the documented extender surface, and the goal is to propose
-a complete, inspectable foundation that word authors can rely on without reaching into internals.
+They are public on purpose: they are the documented extender surface.
 
 ## Stack operations
 
@@ -31,15 +30,22 @@ and calls `Runtime.FatalError`.
 
 | Word | Stack effect | Description |
 |---|---|---|
-| `NewWidget(name)` | `( -- widget )` | Allocate a fresh `Widget` in the build arena, push it, and return it |
-| `Attach(component)` | `( widget component -- widget )` | Attach a component to the stack-top widget (rejects duplicates) |
-| `ReplaceComponent(component)` | `( widget component -- widget )` | Replace an existing component of compatible type on the stack-top widget |
+| `NewWidget(name)` | `( -- widget )` | Allocate a fresh `Widget` with three empty bags (Component, Property, Behavior), push it, and return it |
+| `AttachComponent(c)` | `( widget component -- widget )` | Attach a `Component` to the stack-top widget's Component bag (rejects duplicates) |
+| `AttachProperty(p)` | `( widget property -- widget )` | Attach a `Property` to the stack-top widget's Property bag (rejects duplicates) |
+| `AttachBehavior(b)` | `( widget behavior -- widget )` | Attach a `Behavior` to the stack-top widget's Behavior bag (rejects duplicates) |
+| `ReplaceComponent(c)` | `( widget component -- widget )` | Remove any existing Component of the same abstract family, then attach the new one (Component bag only) |
 
 `NewWidget` returns the widget as a convenience for applicative style:
 ```beef
 let w = NewWidget("Custom");
-w.Attach(new:BuildAlloc ...);
+w.AttachComponent(new:BuildAlloc ...);
+w.AttachProperty(new:BuildAlloc ...);
 ```
+
+`ReplaceComponent` is used by pen blocks (`Background`, `Border`) to replace an existing
+`Interior`/`Boundary` instead of triggering a duplicate error. Property and Behavior bags
+don't have a `Replace` — modifier words mutate the existing instance in place.
 
 ## Containers
 
@@ -56,7 +62,7 @@ Example (the `VStack_` closing word):
 public static void VStack_()
 {
     NewWidget("VStack");
-    Attach(new:BuildAlloc StackLayout() { Axis = .Vertical });
+    AttachComponent(new:BuildAlloc StackLayout() { Axis = .Vertical });
     CloseContainer("VStack");
 }
 ```
@@ -66,7 +72,7 @@ public static void VStack_()
 | Word | Stack effect | Description |
 |---|---|---|
 | `PushPen(pen)` | `( -- pen )` | Push a pen `Component` onto the stack |
-| `ClosePen(name)` | `( ... marker widget pen -- ... widget )` | Pop the pen, find and remove the matching marker, return the pen (caller attaches it) |
+| `ClosePen(name)` | `( ... marker widget pen -- ... widget )` | Pop the pen, find and remove the matching marker, return the pen (caller attaches it via `ReplaceComponent`) |
 
 Pens use the same marker mechanism as containers. The closing word pops the pen, validates it,
 and calls `ReplaceComponent` to attach it to the widget below.
@@ -75,7 +81,7 @@ and calls `ReplaceComponent` to attach it to the widget below.
 
 | Word | Description |
 |---|---|
-| `RegisterHandler(h)` | Register a `ClickHandler` for the current build. Framework takes ownership; the framework frees handlers on the next rebuild. |
+| `RegisterHandler(h)` | Register a `ClickHandler` for the current build. Framework takes ownership; handlers are freed on the next rebuild. |
 
 Handlers only ever dispatch against the current tree, so this lifetime is safe.
 
@@ -86,6 +92,7 @@ Handlers only ever dispatch against the current tree, so this lifetime is safe.
 | `BeginBuild(arena, handlers)` | Initialize the stack and build arena. Called by `App.RebuildIfNeeded()`. |
 | `EndBuild()` | Validate the stack has exactly 1 root widget, pop and return it. Called by `App.RebuildIfNeeded()`. |
 | `BuildAlloc` | The `BumpAllocator` for the current build. Valid only between `BeginBuild` and `EndBuild`. Use `new:BuildAlloc` for all allocations during `Build()`. |
+| `CurrentBuildPosition()` | Returns the current widget build index. Used by interaction state properties (`PressState`) to query trackers. |
 
 ## Failure
 

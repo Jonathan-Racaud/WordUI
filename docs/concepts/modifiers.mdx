@@ -1,9 +1,9 @@
 ---
 title: Modifiers & Pen Blocks
-description: How modifiers act on the stack top, and the pen-block pattern for styling
+description: How modifiers act on the stack top, the three-bag get-or-create pattern, and pen blocks for styling
 ---
 
-Modifiers words and pen blocks is how WordUI propose styling and layout on the widget stack.
+Modifier words and pen blocks are how WordUI applies styling and layout on the widget stack.
 The key insight is simple: modifiers always act on whatever widget sits at the stack top,
 which means they compose onto containers for free — no plumbing, no look-ahead, no special
 syntax for "this applies to the parent."
@@ -26,11 +26,12 @@ VStack(scope () => {
     Label("A");
     Label("B");
 }); Padding(8);     // Padding on the VStack
-   TextColor(.Red); // Also on the VStack (but VStack has no TextStyle → error)
+   TextColor(.Red); // Also on the VStack (but VStack has no TextStyleProperty → error)
 ```
 
-Modifiers use `Require<T>` to validate the stack top has the expected component. Applying
-`TextColor` to an `HStack` produces: `"HStack has no TextStyle — TextColor does not apply to it"`.
+Modifiers use `Require*<T>` to validate the stack top has the expected type in the right
+bag. Applying `TextColor` to an `HStack` produces: `"HStack has no TextStyleProperty —
+TextColor does not apply to it"`.
 
 ## Modifier ordering is meaningful
 
@@ -38,9 +39,9 @@ Modifiers execute left-to-right, top-to-bottom. Each one modifies the widget and
 
 ```beef
 Label("Hello");
-FontSize(24);     // sets font size
-TextColor(.Red);  // sets color
-// Widget now has TextStyle { FontSize=24, TextColor=Red }
+FontSize(24);     // sets font size on TextStyleProperty
+TextColor(.Red);  // sets color on TextStyleProperty
+// Widget now has TextStyleProperty { FontSize=24, TextColor=Red }
 ```
 
 Modifiers after a container close act on the container:
@@ -49,9 +50,93 @@ Modifiers after a container close act on the container:
 HStack(scope () => {
     Button("+");
     Button("-");
-}); Spacing(4);    // ← acts on the HStack widget
+}); Spacing(4);    // ← acts on the HStack widget's StackLayout
    Padding(8);     // ← acts on the HStack widget
 ```
+
+## Target bag per modifier
+
+Different modifier words target different bags on the widget:
+
+| Modifier | Target bag | Target type |
+|---|---|---|
+| `TextColor`, `FontSize` | Property | `TextStyleProperty` |
+| `Center`, `AlignStart`, `AlignEnd`, `AlignStretch` | Property | `LayoutHint` |
+| `Width`, `Height`, `FixedSize` | Property | `LayoutHint` |
+| `Padding` | Widget field | `Widget.Padding` (universal) |
+| `Spacing` | Component | `StackLayout` |
+| `OnClick` | Behavior | `OnClickBehavior` |
+
+The bag is an implementation detail most of the time — you write `TextColor(.Red)` and it
+just works. But it matters when you author your own modifier words: you need to choose
+whether the data lives in a `Component`, `Property`, or `Behavior`.
+
+## Get-or-create pattern
+
+Most modifier words follow a **get-or-create** pattern. The modifier checks whether the
+widget already has the target type; if yes, it mutates it in place. If no, it creates one
+and attaches it:
+
+```beef
+// Property example: Center() get-or-creates a LayoutHint
+public static void Center()
+{
+    let w = Top("Center");
+    var hint = w.GetProperty<LayoutHint>();
+    if (hint == null)
+    {
+        hint = new:BuildAlloc LayoutHint();
+        w.AttachProperty(hint);
+    }
+    hint.CrossAlign = .Center;
+}
+
+// Behavior example: OnClick get-or-creates an OnClickBehavior
+public static void OnClick(ClickHandler h)
+{
+    let w = Top("OnClick");
+    var b = w.GetBehavior<OnClickBehavior>();
+    if (b == null)
+    {
+        b = new:BuildAlloc OnClickBehavior();
+        w.AttachBehavior(b);
+    }
+    RegisterHandler(h);
+    b.Handler = h;
+}
+```
+
+This ensures a modifier works whether it's the first or Nth one on a widget; no ordering
+dependency. The pattern is the same across all three bags.
+
+## Interaction state modifiers (IfPressed)
+
+`IfPressed` is a conditional modifier — it only runs its body when the widget is being
+pressed. It's built on the generic `IfActive<T>` mechanism:
+
+```beef
+Button("+"); {
+    TextColor(.White);
+    IfPressed(scope () => {
+        Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+    });
+    OnClick(new => { mCount++; Invalidate(); });
+}
+```
+
+How it works: `IfActive<PressState>(body)` get-or-creates a `PressState` property on the
+stack-top widget, then evaluates `PressState.IsActive` — which queries
+`PressTracker.IsPressed(buildIndex)`. When true, the body runs (typically a
+`Background { ... }` block that replaces the `Interior` with a brighter fill). When false,
+the body doesn't run and the widget renders its default appearance.
+
+This is rebuild-safe: on the first build the `PressState` property is created and attached;
+on subsequent rebuilds `GetProperty<PressState>()` finds the existing instance. The
+`IsActive` query is inline — it doesn't trigger a separate rebuild. The visual change
+happens during the normal build cycle.
+
+`IfActive<T>` is the generic mechanism; any `Property` that implements
+`IInteractionState` can power a conditional modifier. `IfPressed` is just the first one.
 
 ## Pen blocks
 
@@ -73,21 +158,28 @@ Border(scope () => {
 
 ### How pens work
 
-A pen block uses the same paired-primitive pattern as containers:
+A pen block uses the same paired-primitive pattern as containers, but the closing word
+calls `ReplaceComponent` on the Component bag — it removes any existing component in the
+same abstract family and attaches the new one:
 
-1. `_Interior()` pushes a new `Interior` component as a "pen" onto the stack
-2. Pen property words (`Fill`, `Radius`, `Stroke`, `StrokeWidth`) modify the pen on top
-3. `Interior_()` pops the pen, attaches it to the widget below it (via `ClosePen`), and pops
-   the pen from the stack
+1. `_Interior()` pushes a named marker, then an `Interior` pen onto the stack
+2. Pen property words (`Fill`, `Radius`) modify the pen on top
+3. `Interior_()` pops the pen, validates it, calls `ReplaceComponent` to attach it to the
+   widget below, and pops the marker
 
 The stack effect is:
 
 ```
-_Interior   ( widget -- widget pen )
-Fill        ( widget pen color -- widget pen )
-Radius      ( widget pen float -- widget pen )
-Interior_   ( widget pen -- widget )
+_Interior   ( widget -- widget mark pen )
+Fill        ( widget mark pen color -- widget mark pen )
+Radius      ( widget mark pen float -- widget mark pen )
+Interior_   ( widget mark pen -- widget )
 ```
+
+Using `ReplaceComponent` (not `AttachComponent`) means you can re-focus a widget with a
+new `Background { ... }` block and it replaces the old `Interior` instead of triggering
+a duplicate-component error. This is the replacement-semantics pattern: pens replace;
+ordinary modifier words mutate in place.
 
 ### Pen property words
 
@@ -107,24 +199,3 @@ Background(scope () => { Fill(.Red); Radius(8); });
 // equivalent to:
 _Interior(); Fill(.Red); Radius(8); Interior_();
 ```
-
-## Get-or-create pattern
-
-Many modifier words follow a **get-or-create** pattern:
-
-```beef
-public static void OnClick(ClickHandler handler)
-{
-    let widget = Top("OnClick");
-    var clickable = widget.Get<Clickable>();
-    if (clickable == null)
-    {
-        clickable = new:BuildAlloc Clickable();
-        widget.Attach(clickable);
-    }
-    clickable.Handler = handler;
-}
-```
-
-This ensures a modifier works whether it's the first or Nth one on a widget; no ordering
-dependency between modifiers that set properties on the same component.

@@ -1,6 +1,6 @@
 ---
 title: Modifiers
-description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing
+description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing, IfPressed
 ---
 
 Modifier words act on the widget at the stack top. They follow **Rule B**: always write the
@@ -20,8 +20,8 @@ with modifiers for free.
 VStack(scope () => { ... }); Padding(8);
 ```
 
-Applies uniform padding to the stack-top widget. Padding is universal; every widget
-participates in flow layout.
+Applies uniform padding to the stack-top widget. Padding is a universal `Widget` field;
+every widget participates in flow layout.
 
 ### Spacing
 
@@ -37,10 +37,12 @@ HStack(scope () => {
 ```
 
 Sets the gap between children in a stack container. Requires the widget to have a
-`StackLayout` component — applying `Spacing` to a `Label` errors with:
+`StackLayout` component (Component bag) — applying `Spacing` to a `Label` errors with:
 `"Label has no StackLayout — Spacing does not apply to it"`.
 
 ## Text modifiers
+
+These target the `TextStyleProperty` in the Property bag.
 
 ### TextColor
 
@@ -52,8 +54,6 @@ Sets the gap between children in a stack container. Requires the widget to have 
 Label("Warning"); TextColor(.Red);
 ```
 
-Sets the text color on the stack-top widget's `TextStyle`. Requires `TextStyle`.
-
 ### FontSize
 
 ```
@@ -64,7 +64,7 @@ Sets the text color on the stack-top widget's `TextStyle`. Requires `TextStyle`.
 Label("Title"); FontSize(24);
 ```
 
-Sets the font size in pixels. Requires `TextStyle`.
+Sets the font size in pixels.
 
 ## Identity
 
@@ -83,8 +83,9 @@ but is currently a placeholder; the persistent-state side table that uses it arr
 
 ## Cross-axis alignment
 
-These words set the `CrossAlign` property on a `LayoutHint` component (get-or-create pattern).
-They determine how a child is positioned perpendicular to the stack's main axis.
+These words set the `CrossAlign` field on a `LayoutHint` property (Property bag,
+get-or-create pattern). They determine how a child is positioned perpendicular to the
+stack's main axis.
 
 | Word | `CrossAlign` | Effect |
 |---|---|---|
@@ -103,7 +104,7 @@ VStack(scope () => {
 
 ## Sizing constraints
 
-These words set sizing constraints on the `LayoutHint` component.
+These set sizing constraints on the `LayoutHint` property.
 
 | Word | Description |
 |---|---|
@@ -123,3 +124,29 @@ These words set sizing constraints on the `LayoutHint` component.
 ```beef
 Button("OK"); FixedSize(120, 40);
 ```
+
+## Interaction state
+
+### IfPressed
+
+```
+( widget delegate -- widget )
+```
+
+```beef
+Button("+"); {
+    TextColor(.White);
+    IfPressed(scope () => {
+        Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+    });
+    OnClick(new => { mCount++; Invalidate(); });
+}
+```
+
+Runs the body only while the stack-top widget is being pressed. Built on `IfActive<PressState>`,
+which get-or-creates a `PressState` property (Property bag) and evaluates
+`PressTracker.IsPressed(buildIndex)`. The body typically contains a `Background { ... }`
+block that replaces the `Interior` with a highlight color.
+
+Rebuild-safe: `PressState` is created on the first build and found via `GetProperty` on
+subsequent rebuilds. The `IsActive` query is inline — it doesn't trigger a separate rebuild.

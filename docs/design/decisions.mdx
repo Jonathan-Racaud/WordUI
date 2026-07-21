@@ -57,16 +57,28 @@ for optimization only if profiling proves them necessary.
 
 ---
 
-## 5. One widget class + component composition
+## 5. One widget class + three type-safe bags
 
-`Widget` is `sealed`; the no-subclassing rule is compiler-enforced. Capabilities are
-`Component` objects in a bag. The single inheritance point is `Component`, one level deep.
+`Widget` is `sealed`; the no-subclassing rule is compiler-enforced. Capabilities split
+across three independent bags:
+
+| Bag | Base class | Purpose |
+|---|---|---|
+| **Component** | `Component` (abstract) | Pipeline participants — `Measure`, `Draw*` hooks |
+| **Property** | `Property` (abstract) | Pure data — `Describe` only, queried by other code |
+| **Behavior** | `Behavior` (abstract) | Event handlers — `Describe` only, iterated by input dispatch |
+
+Each bag has its own typed `Get*<T>()`, `Require*<T>(word)`, and `Attach*(T)` API.
+`ReplaceComponent` (Component bag only) handles replacement semantics for pen blocks.
 
 **Why:** Rebuild-on-invalidate makes widgets transient descriptions, not long-lived actors.
-Behavior polymorphism moves to `Component` (inheritance for behavior hooks, one level).
-Capability mixing is composition (bags handle combinatorial combinations that subclass trees
-can't). Framework components and user components are peers; same virtual hooks, no
-registration.
+Behavior polymorphism moves to the three bag base classes (one level deep each). Capability
+mixing is composition (bags handle combinatorial combinations that subclass trees can't).
+The three-way split means each framework subsystem iterates exactly what it needs: the draw
+loop iterates Components only; layout queries Components and Properties; input dispatch
+iterates Behaviors. A single Component bag forced no-op virtual dispatches for data-only
+and event-only types. Framework types and user types are peers in every bag; same virtual
+hooks, no registration.
 
 ---
 

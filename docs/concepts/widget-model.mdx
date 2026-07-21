@@ -1,73 +1,140 @@
 ---
 title: Widget Model
-description: The sealed Widget class, Component composition, and capability queries
+description: The sealed Widget class and the three-bag architecture — Component, Property, Behavior
 ---
 
 WordUI has **one widget class** and it is `sealed`; the compiler enforces the no-subclassing rule.
-All capabilities (text, layout, styling, click handling) are `Component` objects stored in a bag
-on the widget. This is intentionally opinionated — subclass trees would explode combinatorially
-for something like a clickable styled label, but bags handle it trivially.
+Everything a widget can do — render text, draw a background, respond to clicks, align itself —
+lives in one of three separate type-safe bags. The bags are the architecture.
 
-## Widget
+## The three bags
 
-`Widget` (in `src/Core/Widget.bf`) carries:
+`Widget` (in `src/Core/Widget.bf`) carries its name, a few universal fields, and three lists:
 
-- **Identity:** `Name` (debugging label), `Key` (stable identity for future state side-table)
-- **Layout:** `Padding` — the one universal layout property
-- **Capabilities:** a bag of `Component` objects
+| Bag | Base class | What goes in it | Pipeline hooks |
+|---|---|---|---|
+| **Component** | `Component` | Pipeline participants | `Measure`, `DrawBackground`, `DrawContent`, `DrawOverlay` |
+| **Property** | `Property` | Pure data | `Describe` only |
+| **Behavior** | `Behavior` | Event handlers | `Describe` only |
+
+A bag is just a `List<T>` behind a type-safe accessor. The bags are independent: putting
+something in the Property bag doesn't affect the Component bag, and each bag's query methods
+only look at that bag.
+
+Why three bags? Because a single `Component` bag forced no-op virtual dispatches for
+data-only types. `TextStyleProperty` has no `Measure` or `Draw` — it's pure data the
+`TextComponent` reads. `OnClickBehavior` has no pipeline hooks — it's a delegate the input
+system invokes. Putting everything in one bag meant the draw loop, layout pass, and event
+dispatcher each filtered through a common list of things that mostly didn't apply. Three
+bags let each subsystem iterate exactly what it needs: the draw loop iterates Components
+only; layout queries both Components and Properties; input dispatch iterates Behaviors.
+The tree dump iterates all three.
 
 ## Component
 
-`Component` is an `abstract class` and the **single inheritance point** in the framework, one level
-deep. It provides virtual hooks that framework passes call into:
+`Component` is an `abstract class` and the **single inheritance point** in the framework, one
+level deep. It provides virtual hooks that framework passes call into:
 
 | Hook | Called by | Purpose |
 |---|---|---|
 | `Describe(String)` | TreeDump | Human-readable description |
 | `Measure(Size)` | Layout pass | Return intrinsic size |
-| `DrawBackground` | Painter | Fill, background color |
-| `DrawContent` | Painter | Text, custom drawing |
-| `DrawOverlay` | Painter | Borders, debug overlays |
+| `DrawBackground(Painter, Widget, Rect)` | Paint pass (back) | Fill, background color |
+| `DrawContent(Painter, Widget, Rect)` | Paint pass (middle) | Text, custom drawing |
+| `DrawOverlay(Painter, Widget, Rect)` | Paint pass (front) | Borders, debug overlays |
 
-Framework components and user components are **peers**; every pass dispatches through the same
-virtual hooks, so a user's component participates in layout, rendering, and tree dumps with zero
-registration.
+Framework components and user components are **peers**; every pass dispatches through the
+same virtual hooks. A user's `Component` subclass participates in layout, rendering, and
+tree dumps with zero registration.
+
+Current framework components:
+- `TextComponent` — holds the string content, handles `Measure` and `DrawContent`
+- `Interior` — fills the widget's bounds with a solid color and corner radius (`DrawBackground`)
+- `Boundary` — strokes the widget's bounds (`DrawOverlay`)
+- `Children` — makes a widget a container (holds the child list)
+- `StackLayout` — container axis and spacing, queried by the layout pass
+
+## Property
+
+`Property` is an `abstract class` for pure data. It has exactly one virtual: `Describe(String)`.
+Properties have no `Measure`, no draw hooks, no event dispatch — they're queried by other code.
+
+| Property | What it holds | Who reads it |
+|---|---|---|
+| `TextStyleProperty` | `FontSize`, `TextColor` | `TextComponent` (Measure + DrawContent), modifier words |
+| `LayoutHint` | `CrossAlign`, `Width`, `Height` | Layout pass |
+| `PressState` | `IsActive` → queries `PressTracker` | `IfActive<T>` / `IfPressed` conditional build |
+
+## Behavior
+
+`Behavior` is an `abstract class` for event handlers. Also has only `Describe(String)`. Behaviors
+are iterated by the input system during event dispatch — `PressTracker` walks the hit-test
+chain, finds widgets with `OnClickBehavior`, and fires the handler.
+
+| Behavior | What it holds | Who reads it |
+|---|---|---|
+| `OnClickBehavior` | `ClickHandler Handler` delegate | `PressTracker` on mouse-up |
 
 ## Capability queries
 
-```beef
-// Get<T>() — returns null if the component isn't attached
-let text = widget.Get<TextStyle>();
-if (text != null) { ... }
-
-// Require<T>(word) — fails with a named error if absent
-let text = widget.Require<TextStyle>("FontSize");
-// Error: "HStack has no TextStyle — FontSize does not apply to it"
-```
-
-`Require<T>` is the standard pattern in modifier words; it produces a readable error when a
-modifier is applied to a widget that doesn't carry the expected component.
-
-## Attach and duplicates
+Each bag has its own typed getter and require method:
 
 ```beef
-widget.Attach(new:alloc TextStyle() { Text = "Hello" });
+// Component bag
+let text = widget.GetComponent<TextComponent>();
+let layout = widget.RequireComponent<StackLayout>("Spacing");
+
+// Property bag
+let style = widget.GetProperty<TextStyleProperty>();
+let hint = widget.RequireProperty<LayoutHint>("Center");
+
+// Behavior bag
+let click = widget.GetBehavior<OnClickBehavior>();
+let click2 = widget.RequireBehavior<OnClickBehavior>("ExpectClick");
 ```
 
-`Attach` **rejects duplicate component types**; a second `TextStyle` on one widget is almost
-always a bug (a construction word firing at the wrong stack top). The framework enforces this at runtime
-with a named error.
+`Get*<T>()` returns null if the item isn't in that bag. `Require*<T>(word)` fails with a named
+error — "HStack has no TextStyleProperty — FontSize does not apply to it". `Require` is the
+standard pattern in modifier words; the word parameter produces a readable error when a
+modifier is applied to a widget that doesn't carry the expected type.
+
+## Attach and duplicate detection
+
+Each bag has its own attach method. All three reject duplicate types:
+
+```beef
+widget.AttachComponent(new:BuildAlloc TextComponent() { Content = "Hello" });
+widget.AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 24 });
+widget.AttachBehavior(new:BuildAlloc OnClickBehavior() { Handler = h });
+```
+
+A second `TextStyleProperty` on one widget is almost always a bug — a construction word
+firing at the wrong stack top. The framework catches it at runtime with a named error.
+
+## ReplaceComponent (Component bag only)
+
+The Component bag has one extra operation: `ReplaceComponent`. It removes any existing
+component whose type is in the same abstract family, then attaches the new one. Pen blocks
+(`Background`, `Border`) use this: re-running a `Background { ... }` block on a widget that
+already has an `Interior` replaces the old one instead of triggering a duplicate error.
+
+Property and Behavior bags don't have `Replace` — you just mutate the existing instance
+in place. `LayoutHint` and `TextStyleProperty` words (`Center()`, `TextColor()`) get-or-create
+and then set fields on the same instance across rebuilds.
 
 ## Why not subclasses?
 
 WordUI chose rebuild-on-invalidate, so widgets are **transient descriptions**: data records
-consumed by framework passes, not long-lived stateful actors. Behavior polymorphism moves down
-to `Component`:
+consumed by framework passes, not long-lived stateful actors. Behavior polymorphism moves
+down to the three bag base classes:
 
 - **Inheritance for behavior:** `Component` subclasses override `Measure`/`Draw*` hooks. One level.
-- **Composition for capabilities:** widgets are bags. A clickable styled label is
-  `TextStyle + Clickable + Interior`; no `ClickableLabel` class can ever exist. Subclass trees
-  would explode combinatorially; bags handle it trivially.
+- **Inheritance for data:** `Property` subclasses carry data queried by other code.
+- **Inheritance for events:** `Behavior` subclasses carry delegates invoked by the input system.
+- **Composition for capabilities:** widgets are three bags. A clickable styled label is
+  `TextComponent + TextStyleProperty + Interior + Boundary + OnClickBehavior`; no
+  `ClickableLabel` class can ever exist. Subclass trees would explode combinatorially;
+  bags handle it trivially.
 
 ## The word-author API
 
@@ -78,7 +145,8 @@ public static void Label()
 {
     let text = PopStr("Label");   // 1. pop inputs FIRST
     NewWidget("Label");           // 2. then push the widget
-    Attach(new:BuildAlloc TextStyle() { Text = text });   // 3. then attach/modify
+    AttachComponent(new:BuildAlloc TextComponent() { Content = text });
+    AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 12, TextColor = .Black });
 }
 ```
 

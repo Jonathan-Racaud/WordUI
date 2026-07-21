@@ -1,119 +1,167 @@
 ---
 title: Custom Components
-description: Tier 2 — subclass Component and provide a get-or-create modifier word
+description: Tier 2 — subclass Component, Property, or Behavior and provide a get-or-create modifier word
 ---
 
-When existing components don't cover your needs, create a new `Component` subclass and a
-modifier word that attaches it on demand. This works on **any widget**, in your own project,
-without touching the framework — the same extension mechanism that powers the whole word
-vocabulary.
+When existing types don't cover your needs, create a new subclass of `Component`, `Property`,
+or `Behavior` and a modifier word that get-or-creates it on the stack-top widget. This works
+on **any widget**, in your own project, without touching the framework — the same extension
+mechanism that powers the whole word vocabulary.
 
-## The pattern
+## Choosing the right bag
 
-Every behavior component follows the same three-part pattern:
+Before you write code, pick the right base class:
 
-1. **A `Component` subclass** with the data and hooks you need
-2. **A modifier word** that get-or-creates your component on the stack-top widget
+| If your type... | Subclass | Bag | Example |
+|---|---|---|---|
+| Participates in layout or rendering | `Component` | Component | `TextComponent`, `Interior`, `Boundary` |
+| Holds pure data queried by other code | `Property` | Property | `TextStyleProperty`, `LayoutHint`, `PressState` |
+| Handles an event (click, hover, focus) | `Behavior` | Behavior | `OnClickBehavior` |
+
+The key question: does your type need `Measure`, `DrawBackground`, `DrawContent`, or
+`DrawOverlay`? If yes, it's a `Component`. If it's pure data read by a `Component`
+or the layout pass, it's a `Property`. If it's a delegate invoked by the input system,
+it's a `Behavior`.
+
+## The pattern (all three bags)
+
+Every capability follows the same three-part pattern:
+
+1. **A subclass** of `Component`, `Property`, or `Behavior` with the data and hooks you need
+2. **A modifier word** that get-or-creates your type on the stack-top widget in the right bag
 3. **`using static`** to bring your word into scope
 
-The canonical example is `Clickable` from the framework itself:
-
-### 1. The component
+### Property example: custom data
 
 ```beef
-// src/Components/Clickable.bf
-public delegate void ClickHandler();
-
-public class Clickable : Component
+// A Property that holds accessibility metadata
+public class AccessibilityProperty : Property
 {
-    public ClickHandler Handler;
+    public String Label;
+    public bool IsFocusable;
+
+    public override void Describe(String buf)
+    {
+        buf.Append(scope $" accessibility=\"{Label}\"");
+    }
+}
+
+extension UI
+{
+    public static void Accessibility(StringView label)
+    {
+        let w = Top("Accessibility");
+        var a = w.GetProperty<AccessibilityProperty>();
+        if (a == null)
+        {
+            a = new:BuildAlloc AccessibilityProperty();
+            w.AttachProperty(a);
+        }
+        a.Label = new:BuildAlloc String(label);
+    }
 }
 ```
 
-Minimal; just data. For components that participate in layout or rendering, override the
-virtual hooks (`Measure`, `Draw*`).
+### Behavior example: event handler
 
-### 2. The modifier word
+The framework's own `OnClick` is the canonical example:
 
 ```beef
-// src/Handlers/OnClick.bf
+public class OnClickBehavior : Behavior
+{
+    public ClickHandler Handler;
+
+    public override void Describe(String buf)
+    {
+        buf.Append(" OnClick");
+    }
+}
+
 extension UI
 {
     public static void OnClick(ClickHandler h)
     {
         let w = Top("OnClick");
-        var c = w.Get<Clickable>();
-        if (c == null)
+        var b = w.GetBehavior<OnClickBehavior>();
+        if (b == null)
         {
-            c = new:BuildAlloc Clickable();
-            w.Attach(c);
+            b = new:BuildAlloc OnClickBehavior();
+            w.AttachBehavior(b);
         }
         RegisterHandler(h);
-        c.Handler = h;
+        b.Handler = h;
     }
 }
 ```
 
-Key points:
-- `Top("OnClick")` gets the stack-top widget with error checking
-- `Get<T>()` checks if the component already exists
-- If null, allocate via `new:BuildAlloc` and `Attach`
-- Apply the modifier's payload (here: the handler)
+### Component example: pipeline participant
 
-### 3. Usage
+A `Component` subclass that participates in the draw pipeline:
 
 ```beef
-Button("Submit"); OnClick(new => SubmitForm);
-```
-
-## A worked example: Tooltip
-
-```beef
-// MyApp/TooltipComponent.bf
-public class Tooltip : Component
+public class FilledRect : Component
 {
-    public String TooltipText;
-}
+    public Color FillColor = .White;
 
-// MyApp/TooltipWord.bf
-namespace MyApp;
+    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+    {
+        painter.FillRect(bounds, FillColor);
+    }
+
+    public override void Describe(String buf)
+    {
+        buf.Append(scope $" fill={FillColor}");
+    }
+}
 
 extension UI
 {
-    public static void Tooltip(StringView text)
+    public static void FilledRect(Color c)
     {
-        let w = Top("Tooltip");
-        var t = w.Get<Tooltip>();
-        if (t == null)
-        {
-            t = new:BuildAlloc Tooltip();
-            w.Attach(t);
-        }
-        t.TooltipText = new:BuildAlloc String(text);
+        NewWidget("FilledRect");
+        AttachComponent(new:BuildAlloc FilledRect() { FillColor = c });
     }
 }
-
-// Usage
-using static MyApp.UI;
-Button("?"); Tooltip("Click for help");
 ```
 
 ## The get-or-create rule
 
-Always use `Get<T>()` first and create only if null. This ensures:
+Always use `Get*<T>()` first and create only if null. This ensures:
 
-- Multiple modifiers on the same widget share one component
-- No ordering dependency; `Tooltip("x"); OnClick(f);` and `OnClick(f); Tooltip("x");` both work
-- `Attach`'s duplicate-detection doesn't fire
+- Multiple modifiers on the same widget share one instance
+- No ordering dependency; modifiers compose in any order
+- `Attach*`'s duplicate-detection doesn't fire
+
+```beef
+// Both work regardless of order
+Label("X"); Accessibility("hello"); TextColor(.Red);
+Label("X"); TextColor(.Red); Accessibility("hello");
+```
+
+## Replacement vs mutation
+
+When you need to replace an existing instance entirely (like pen blocks do for `Interior`
+and `Boundary`), use `ReplaceComponent` on the Component bag. Property and Behavior bags
+don't have `Replace` — mutate the existing instance in place instead.
+
+```beef
+// Component: replace existing Interior
+let interior = new:BuildAlloc Interior() { FillColor = .Red };
+widget.ReplaceComponent(interior);
+
+// Property: mutate existing instance
+widget.RequireProperty<LayoutHint>("Center").CrossAlign = .Center;
+```
 
 ## When to use Tier 2 vs Tier 1
 
-| Tier 1 (factored word) | Tier 2 (new component) |
+| Tier 1 (factored word) | Tier 2 (new subclass) |
 |---|---|
-| Compose existing words | New data that existing components don't hold |
-| Zero classes | One `Component` subclass + one modifier word |
+| Compose existing words | New data/behavior that existing types don't hold |
+| Zero classes | One subclass + one modifier word |
 | Applies a preset style/behavior | Adds a new capability to any widget |
-| Example: `TitleLabel(text)` | Example: `OnClick(handler)` |
+| Example: `TitleLabel(text)` | Example: `OnClick(handler)`, `Accessibility("label")` |
 
-If you find yourself wanting to attach data to a widget that no existing component stores, you
-need Tier 2. If you're just composing existing words into a named sequence, stay at Tier 1.
+If you find yourself wanting to attach data or behavior to a widget that no existing type
+stores, you need Tier 2. If you're just composing existing words into a named sequence,
+stay at Tier 1.
