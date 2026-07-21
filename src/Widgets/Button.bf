@@ -14,7 +14,8 @@ extension UI
 	{
 		let text = PopStr("Button");
 		NewWidget("Button");
-		Attach(new:BuildAlloc TextStyle() { Text = text });
+		AttachComponent(new:BuildAlloc TextComponent() { Content = text });
+		AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 12, TextColor = .Black });
 		Background(scope () => { Fill(.(80, 80, 80, 255)); Radius(4); });
 		Border(scope () => { Stroke(.(120, 120, 120, 255)); StrokeWidth(1); Radius(4); });
 		Padding(8);

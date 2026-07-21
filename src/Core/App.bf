@@ -10,6 +10,10 @@ namespace WordUI;
 // of this class.
 public abstract class App
 {
+	// The active App instance; set by SDLApp constructor, used by trackers
+	// and other infrastructure that need to trigger rebuilds.
+	public static App Instance;
+
 	BumpAllocator mArena ~ delete _;
 	List<ClickHandler> mHandlers = new .() ~ { ClearHandlers(); delete _; };
 	Widget mRoot;

@@ -24,7 +24,7 @@ static class HitTest
 			current = w;
 		}
 
-		let children = w.Get<Children>();
+		let children = w.GetComponent<Children>();
 		if (children != null)
 		{
 			for (let child in children.Items)

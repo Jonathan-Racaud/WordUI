@@ -9,7 +9,7 @@ extension UI
 	public static void HStack_()
 	{
 		NewWidget("HStack");
-		Attach(new:BuildAlloc StackLayout() { Axis = .Horizontal });
+		AttachComponent(new:BuildAlloc StackLayout() { Axis = .Horizontal });
 		CloseContainer("HStack");
 	}
 
@@ -20,7 +20,7 @@ extension UI
 	public static void VStack_()
 	{
 		NewWidget("VStack");
-		Attach(new:BuildAlloc StackLayout() { Axis = .Vertical });
+		AttachComponent(new:BuildAlloc StackLayout() { Axis = .Vertical });
 		CloseContainer("VStack");
 	}
 

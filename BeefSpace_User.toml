@@ -1,7 +1,7 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Program.bf", "src/Widgets/Button.bf", "src/Components/Clickable.bf", "src/Core/SDLApp.bf", "src/Core/App.bf", "src/Components/TextStyle.bf", "src/Components/StackLayout.bf", "src/Diagnostics/TreeDump.bf", "src/Widgets/Label.bf", "src/Widgets/Spacer.bf", "src/Core/PressTracker.bf", "src/Core/HitTest.bf", "src/Core/Size.bf", "src/Core/Rect.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Core/SDLApp.bf", "src/Core/PressTracker.bf", "src/Core/Widget.bf", "src/Program.bf", "src/Widgets/Label.bf", "src/Core/Component.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
@@ -22,7 +22,7 @@ Type = "DockingFrame"
 SplitType = 1
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
-RequestedWidth = 200.0
+RequestedWidth = 206.0
 RequestedHeight = 200.0
 Type = "TabbedView"
 
@@ -37,62 +37,20 @@ Type = "ProjectPanel"
 IsFillWidget = true
 Permanent = true
 RequestedWidth = 150.0
-RequestedHeight = 150.0
+RequestedHeight = 1072.0
 SizePriority = 150.0
 DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Button.bf"
-TabWidth = 81.0
+Active = true
+TabLabel = "SDLApp.bf"
+TabWidth = 96.0
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "src/Widgets/Button.bf"
-CursorPos = 437
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Clickable.bf"
-TabWidth = 93.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Components/Clickable.bf"
-CursorPos = 98
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "StackLayout.bf"
-TabWidth = 110.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Components/StackLayout.bf"
-CursorPos = 227
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Spacer.bf"
-TabWidth = 81.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Widgets/Spacer.bf"
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "TreeDump.bf"
-TabWidth = 101.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Diagnostics/TreeDump.bf"
-CursorPos = 1078
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "App.bf"
-TabWidth = 65.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/App.bf"
-CursorPos = 979
+FilePath = "src/Core/SDLApp.bf"
+CursorPos = 2357
+VertPos = 1254.375
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
@@ -101,43 +59,7 @@ TabWidth = 115.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/PressTracker.bf"
-CursorPos = 953
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "HitTest.bf"
-TabWidth = 82.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/HitTest.bf"
-CursorPos = 339
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "TextStyle.bf"
-TabWidth = 91.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Components/TextStyle.bf"
-CursorPos = 696
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Size.bf"
-TabWidth = 65.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/Size.bf"
-CursorPos = 152
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Rect.bf"
-TabWidth = 67.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/Rect.bf"
-CursorPos = 199
+CursorPos = 806
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
@@ -146,16 +68,25 @@ TabWidth = 93.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Program.bf"
-CursorPos = 1027
+CursorPos = 1084
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "SDLApp.bf"
-TabWidth = 86.0
+TabLabel = "Component.bf"
+TabWidth = 108.0
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "src/Core/SDLApp.bf"
-CursorPos = 2162
+FilePath = "src/Core/Component.bf"
+CursorPos = 1355
+ProjectName = "WordUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Label.bf"
+TabWidth = 73.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Widgets/Label.bf"
+CursorPos = 351
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]

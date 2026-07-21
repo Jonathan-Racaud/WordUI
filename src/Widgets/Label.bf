@@ -9,7 +9,8 @@ extension UI
 	{
 		let text = PopStr("Label");   // inputs first, then the widget
 		NewWidget("Label");
-		Attach(new:BuildAlloc TextStyle() { Text = text });
+		AttachComponent(new:BuildAlloc TextComponent() { Content = text });
+		AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 12, TextColor = .Black });
 	}
 
 	public static void Label(StringView s) { Str(s); Label(); }

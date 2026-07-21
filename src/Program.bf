@@ -42,6 +42,9 @@ class CounterSDLApp : SDLApp
 			HStack(scope () => {
 				Button("+"); {
 					TextColor(.White);
+					IfPressed(scope () => {
+						Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+					});
 					OnClick(new () => { mCount++; Invalidate(); });
 				} FixedSize(120, 20); Center();
 

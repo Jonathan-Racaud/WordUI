@@ -10,7 +10,7 @@ namespace WordUI;
 // Word-author conventions (see DESIGN.md):
 //  - Modifiers act on the current stack top (widget or closed container).
 //  - Construction is stack-based: pop your inputs FIRST, then NewWidget(),
-//    then Attach()/modifier words. NewWidget also returns the widget for
+//    then AttachComponent()/modifier words. NewWidget also returns the widget for
 //    authors preferring the applicative style.
 //  - The stack is a per-thread construction workspace, empty between builds.
 public static class UI
@@ -24,6 +24,21 @@ public static class UI
 	// strings) goes through `new:BuildAlloc` and dies wholesale on rebuild.
 	// Valid only between BeginBuild and EndBuild.
 	public static BumpAllocator BuildAlloc;
+
+	static int32 sBuildIndex;
+
+	// Returns the BuildIndex of the stack-top widget. Used by interaction
+	// state components to query trackers without allocation.
+	public static int32 CurrentBuildPosition()
+	{
+		if (Stack.IsEmpty)
+			Fail("CurrentBuildPosition", "stack is empty");
+		if (Stack.Back case .Elem(let w))
+			return w.BuildIndex;
+		let s = scope String();
+		Stack.Back.ToString(s);
+		Fail("CurrentBuildPosition", scope $"stack top is {s}, not a widget");
+	}
 
 	static ~this()
 	{
@@ -47,6 +62,7 @@ public static class UI
 		Runtime.Assert(BuildAlloc == null, "BeginBuild called while another build is active");
 		BuildAlloc = arena;
 		sHandlers = handlers;
+		sBuildIndex = 0;
 		if (!Stack.IsEmpty)
 			Fail("BeginBuild", "stack not empty at start of build — a previous build leaked items");
 	}
@@ -153,15 +169,30 @@ public static class UI
 	// escape hatch; canonical word style ignores it).
 	public static Widget NewWidget(StringView name)
 	{
-		let w = new:BuildAlloc Widget(name, new:BuildAlloc List<Component>());
+		let w = new:BuildAlloc Widget(
+			name,
+			new:BuildAlloc List<Component>(),
+			new:BuildAlloc List<Property>(),
+			new:BuildAlloc List<Behavior>());
+		w.BuildIndex = sBuildIndex++;
 		Stack.Add(.Elem(w));
 		return w;
 	}
 
-	// Attaches to the stack top; duplicate component types are rejected there.
-	public static void Attach(Component c)
+	// Component bag helpers
+	public static void AttachComponent(Component c)
 	{
-		Top("Attach").Attach(c);
+		Top("AttachComponent").AttachComponent(c);
+	}
+
+	public static void AttachProperty(Property p)
+	{
+		Top("AttachProperty").AttachProperty(p);
+	}
+
+	public static void AttachBehavior(Behavior b)
+	{
+		Top("AttachBehavior").AttachBehavior(b);
 	}
 
 	// ---- Pens (scoped block primitives, like containers) ----
@@ -247,7 +278,7 @@ public static class UI
 		}
 
 		Stack.RemoveRange(markerIdx, Stack.Count - markerIdx);
-		container.Attach(new:BuildAlloc Children() { Items = children });
+		container.AttachComponent(new:BuildAlloc Children() { Items = children });
 		Stack.Add(.Elem(container));
 	}
 

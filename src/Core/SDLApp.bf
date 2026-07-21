@@ -20,6 +20,7 @@ public abstract class SDLApp : App
 
 	public this()
 	{
+		App.Instance = this;
 		SDL_Init(.SDL_INIT_VIDEO);
 		TTF_Init();
 		SDL_CreateWindowAndRenderer(
@@ -80,7 +81,7 @@ public abstract class SDLApp : App
 			c.DrawContent(mPainter, w, w.mRect);
 
 		// 3. Children — recurse
-		let children = w.Get<Children>();
+		let children = w.GetComponent<Children>();
 		if (children != null)
 		{
 			for (let child in children.Items)
@@ -98,6 +99,7 @@ public abstract class SDLApp : App
 		RebuildIfNeeded();
 		Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
 		DumpTree();
+		Render();
 
 		bool quit = false;
 		SDL_Event event = .();
@@ -130,8 +132,10 @@ public abstract class SDLApp : App
 			}
 
 			if (RebuildIfNeeded())
+			{
 				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
-			Render();
+				Render();
+			}
 		}
 	}
 

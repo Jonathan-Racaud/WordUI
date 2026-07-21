@@ -16,11 +16,11 @@ static class Layout
 	{
 		widget.mRect = available;
 
-		let children = widget.Get<Children>();
+		let children = widget.GetComponent<Children>();
 		if (children == null)
 			return;
 
-		let stack = widget.Get<StackLayout>();
+		let stack = widget.GetComponent<StackLayout>();
 		if (stack == null)
 			return;
 
@@ -105,7 +105,7 @@ static class Layout
 			// child instead of forcing it to fill the row height.
 			float childCrossPos;
 			float childCrossUsed;
-			var hint = child.Get<LayoutHint>();
+			var hint = child.GetProperty<LayoutHint>();
 			bool hasCrossConstraint = hint != null &&
 				(isVertical ? !(hint.Width case .Unconstrained) : !(hint.Height case .Unconstrained));
 
@@ -145,8 +145,8 @@ static class Layout
 	// measures children and computes the total; for leaves, asks components.
 	static Size MeasureWidget(Widget widget, Size constraint)
 	{
-		let children = widget.Get<Children>();
-		let stack = widget.Get<StackLayout>();
+		let children = widget.GetComponent<Children>();
+		let stack = widget.GetComponent<StackLayout>();
 
 		// Container: measure children and compute flex total
 		if (children != null && stack != null)
@@ -184,7 +184,7 @@ static class Layout
 			float h = isVertical ? totalMain : maxCross;
 			w += pad * 2;
 			h += pad * 2;
-			var hint = widget.Get<LayoutHint>();
+			var hint = widget.GetProperty<LayoutHint>();
 			if (hint != null)
 			{
 				w = hint.Width.Apply(w, constraint.Width);
@@ -203,7 +203,7 @@ static class Layout
 		}
 		cw += widget.Padding * 2;
 		ch += widget.Padding * 2;
-		var hint = widget.Get<LayoutHint>();
+		var hint = widget.GetProperty<LayoutHint>();
 		if (hint != null)
 		{
 			cw = hint.Width.Apply(cw, constraint.Width);

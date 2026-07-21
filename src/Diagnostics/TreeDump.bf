@@ -26,10 +26,38 @@ extension App
 		line.Append(scope $"<{w.Name}");
 
 		let props = scope String();
+
+		// Components (pipeline participants)
 		for (let c in w.Components)
 		{
 			let d = scope String();
 			c.Describe(d);
+
+			if (!d.IsEmpty)
+			{
+				if (!props.IsEmpty) props.Append(' ');
+				props.Append(d);
+			}
+		}
+
+		// Properties (pure data)
+		for (let p in w.Properties)
+		{
+			let d = scope String();
+			p.Describe(d);
+
+			if (!d.IsEmpty)
+			{
+				if (!props.IsEmpty) props.Append(' ');
+				props.Append(d);
+			}
+		}
+
+		// Behaviors (event handlers)
+		for (let b in w.Behaviors)
+		{
+			let d = scope String();
+			b.Describe(d);
 
 			if (!d.IsEmpty)
 			{
@@ -50,7 +78,7 @@ extension App
 		if (!props.IsEmpty)
 			line.Append(scope $"{props}");
 
-		let kids = w.Get<Children>();
+		let kids = w.GetComponent<Children>();
 		if (kids != null)
 		{
 			Console.WriteLine(scope $"{line}>");

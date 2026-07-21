@@ -12,6 +12,6 @@ extension UI
 
 	public static void Spacing(float px)
 	{
-		Top("Spacing").Require<StackLayout>("Spacing").Spacing = px;
+		Top("Spacing").RequireComponent<StackLayout>("Spacing").Spacing = px;
 	}
 }

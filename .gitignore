@@ -3,6 +3,7 @@ recovery/
 .claude/
 .whale/
 .agents/
+.reasonix/
 
 # Devenv
 .devenv*
