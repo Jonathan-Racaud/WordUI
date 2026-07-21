@@ -4,12 +4,12 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
-	site: 'https://vendinois.github.io/PFUI/',
+	site: 'https://vendinois.github.io/WordUI/',
 	integrations: [
 		starlight({
-			title: 'PFUI',
+			title: 'WordUI',
 			description: 'An experimental concatenative UI framework for Beef',
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/vendinois/PFUI' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/vendinois/WordUI' }],
 			expressiveCode: {
 				languages: ['beef'],
 			},

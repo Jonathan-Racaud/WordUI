@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Stand-in renderer: indented dump of the current tree. Fully generic — a
 // user-defined component appears here through its Describe override without

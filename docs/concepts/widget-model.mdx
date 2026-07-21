@@ -3,7 +3,7 @@ title: Widget Model
 description: The sealed Widget class, Component composition, and capability queries
 ---
 
-PFUI has **one widget class** and it is `sealed`; the compiler enforces the no-subclassing rule.
+WordUI has **one widget class** and it is `sealed`; the compiler enforces the no-subclassing rule.
 All capabilities (text, layout, styling, click handling) are `Component` objects stored in a bag
 on the widget. This is intentionally opinionated — subclass trees would explode combinatorially
 for something like a clickable styled label, but bags handle it trivially.
@@ -60,7 +60,7 @@ with a named error.
 
 ## Why not subclasses?
 
-PFUI chose rebuild-on-invalidate, so widgets are **transient descriptions**: data records
+WordUI chose rebuild-on-invalidate, so widgets are **transient descriptions**: data records
 consumed by framework passes, not long-lived stateful actors. Behavior polymorphism moves down
 to `Component`:
 

@@ -1,4 +1,4 @@
-# PFUI — Production-Oriented Reorganization Plan (approved & implemented)
+# WordUI — Production-Oriented Reorganization Plan (approved & implemented)
 
 ## Context
 
@@ -90,7 +90,7 @@ src/
 
 ## Verification (all passed)
 
-- `BeefBuild` clean; `./build/Debug_Linux64/PFUI/PFUI` output structurally equivalent to
+- `BeefBuild` clean; `./build/Debug_Linux64/WordUI/WordUI` output structurally equivalent to
   the pre-refactor run (tree nesting, modifier values, Count 0→1 click cycle,
   `rebuilt: False` when state unchanged).
 - `--test-mismatch`: "mismatched containers: closing HStack found an open _VStack()

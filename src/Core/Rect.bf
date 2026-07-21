@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Axis-aligned rectangle in layout space — the shared currency between
 // layout, rendering, and hit-testing.

@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Build, run, and understand your first PFUI application
+description: Build, run, and understand your first WordUI application
 ---
 
 ## Prerequisites
@@ -15,7 +15,7 @@ description: Build, run, and understand your first PFUI application
 BeefBuild
 
 # Run the counter demo
-./build/Debug_Linux64/PFUI/PFUI
+./build/Debug_Linux64/WordUI/WordUI
 ```
 
 The counter demo opens an SDL3 window with a centered title label, `+`/`-` buttons in a
@@ -27,21 +27,21 @@ horizontal stack, and a dynamic count display. Clicking the buttons updates the 
 The binary accepts test flags that verify stack-hygiene error handling:
 
 ```sh
-./build/Debug_Linux64/PFUI/PFUI --test-mismatch    # Mismatched container close
-./build/Debug_Linux64/PFUI/PFUI --test-unbalanced   # Missing close word
-./build/Debug_Linux64/PFUI/PFUI --test-unclosed-pen # Unclosed pen block
-./build/Debug_Linux64/PFUI/PFUI --test-leftover     # Unconsumed stack values
+./build/Debug_Linux64/WordUI/WordUI --test-mismatch    # Mismatched container close
+./build/Debug_Linux64/WordUI/WordUI --test-unbalanced   # Missing close word
+./build/Debug_Linux64/WordUI/WordUI --test-unclosed-pen # Unclosed pen block
+./build/Debug_Linux64/WordUI/WordUI --test-leftover     # Unconsumed stack values
 ```
 
 Each flag runs a negative-test app class that intentionally triggers a named error.
 
-## Your first PFUI app
+## Your first WordUI app
 
-Create a new Beef project and add a reference to PFUI. A minimal app:
+Create a new Beef project and add a reference to WordUI. A minimal app:
 
 ```beef
-using PFUI;
-using static PFUI.UI;
+using WordUI;
+using static WordUI.UI;
 
 class HelloApp : SDLApp
 {

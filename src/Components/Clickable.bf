@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 public delegate void ClickHandler();
 

@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Intrinsic size returned by Component.Measure during the layout pass.
 public struct Size

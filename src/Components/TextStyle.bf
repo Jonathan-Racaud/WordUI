@@ -1,7 +1,7 @@
 using System;
 using SDL3_ttf;
 
-namespace PFUI;
+namespace WordUI;
 
 public class TextStyle : Component
 {

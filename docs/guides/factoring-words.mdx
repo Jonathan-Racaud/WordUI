@@ -4,14 +4,14 @@ description: Tier 1 — compose existing words into a new named word with zero c
 ---
 
 The 90% case: create a new "widget" by factoring a sequence of existing words into a named
-method. This is Factor-style factoring and PFUI's core payoff — zero parameter plumbing,
+method. This is Factor-style factoring and WordUI's core payoff — zero parameter plumbing,
 zero classes, and the resulting word is indistinguishable from built-in vocabulary. The goal
 is to make factoring so cheap that you reach for it instinctively.
 
 ## The pattern
 
 ```beef
-using static PFUI.UI;
+using static WordUI.UI;
 
 static class Words
 {
@@ -24,7 +24,7 @@ static class Words
 }
 
 // Bring your words into scope alongside framework words
-using static PFUI.Words;
+using static WordUI.Words;
 
 // Now indistinguishable from built-in vocabulary
 VStack(scope () => {
@@ -55,7 +55,7 @@ extension UI
 }
 ```
 
-Then `using static MyApp.UI;` makes `DangerButton("Delete")` available alongside every PFUI
+Then `using static MyApp.UI;` makes `DangerButton("Delete")` available alongside every WordUI
 word. No fork of the framework, no registration step; just a static method.
 
 ## Composition

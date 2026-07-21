@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Flex layout pass: constraints-down, sizes-up, sum-main/max-cross,
 // leftover→Spacer. Runs after Build(), stores a Rect on every widget.

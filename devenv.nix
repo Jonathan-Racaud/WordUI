@@ -13,13 +13,13 @@
     ide.exec = "BeefIDE &";
     build.exec = "BeefBuild";
     run.exec = ''
-      BUILD_DIR=build/Debug_Linux64/PFUI
+      BUILD_DIR=build/Debug_Linux64/WordUI
       
       if [ -z "$BUILD_DIR/assets" ]; then
         cp -r assets "$BUILD_DIR"
       fi
       
-      ./$BUILD_DIR/PFUI
+      ./$BUILD_DIR/WordUI
     '';
     brun.exec = "build && run";
   };

@@ -1,8 +1,8 @@
 FileVersion = 1
 
 [Project]
-Name = "PFUI"
-StartupObject = "PFUI.Program"
+Name = "WordUI"
+StartupObject = "WordUI.Program"
 
 [Dependencies]
 corlib = "*"

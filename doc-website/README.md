@@ -1,4 +1,4 @@
-# PFUI Documentation Website
+# WordUI Documentation Website
 
 Built with [Astro](https://astro.build/) + [Starlight](https://starlight.astro.build/).
 

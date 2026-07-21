@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Cross-axis alignment of a widget within the space its parent allocates.
 // Default is Stretch (fill the full cross axis); Start/Center/End position

@@ -3,7 +3,7 @@ title: State Management
 description: Patterns for plain Beef fields, Invalidate(), and the arena lifecycle
 ---
 
-PFUI uses **rebuild-on-invalidate**: plain Beef fields are the persistent state, `Build()`
+WordUI uses **rebuild-on-invalidate**: plain Beef fields are the persistent state, `Build()`
 describes the UI as a function of that state, and `Invalidate()` triggers a fresh widget tree.
 There is no `Model<T>`, no `Bind`, no observable system — state is plain fields, reactivity is
 `Invalidate()`. This is intentionally simple; it's the right default for an experimental

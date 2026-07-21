@@ -1,9 +1,9 @@
 ---
 title: Rebuild Model
-description: How PFUI uses rebuild-on-invalidate with bump-allocation arenas for widget trees
+description: How WordUI uses rebuild-on-invalidate with bump-allocation arenas for widget trees
 ---
 
-PFUI uses **rebuild-on-invalidate**: Flutter's model minus the diffing. Every `Build()` run
+WordUI uses **rebuild-on-invalidate**: Flutter's model minus the diffing. Every `Build()` run
 produces a completely fresh widget tree; the old tree is freed wholesale. The goal is
 simplicity and correctness by construction — no stale references, no missed updates, no
 reconciliation bugs.

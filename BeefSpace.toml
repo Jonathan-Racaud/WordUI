@@ -1,9 +1,9 @@
 FileVersion = 1
 
 [Workspace]
-StartupProject = "PFUI"
+StartupProject = "WordUI"
 
 [Projects]
-PFUI = {Path = "."}
+WordUI = {Path = "."}
 SDL3_ttf-Beef = {Git = "https://github.com/SedulousWorks/SDL3_ttf-Beef"}
 SDL3-Beef = {Git = "https://github.com/SedulousWorks/SDL3-Beef"}

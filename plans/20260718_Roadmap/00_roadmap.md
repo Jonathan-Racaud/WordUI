@@ -89,7 +89,7 @@ localize the SDL2 calls. Drawing flows through *one concrete rendering module* �
 `SDL_RenderFillRect` sprinkled through `Component.Draw` overrides across the tree. This costs
 nothing now (a concrete class is less work than scattered calls) and turns the eventual
 abstraction into a mechanical *extract-interface* refactor instead of a rewrite. Same for the
-event source: adapt `SDL_Event` into a PFUI `InputEvent` at one boundary so hit-testing and
+event source: adapt `SDL_Event` into a WordUI `InputEvent` at one boundary so hit-testing and
 dispatch never see SDL types.
 
 **Grounding fact:** Beef ships a first-party `BeefLibs/SDL2` binding covering core (window,
@@ -99,7 +99,7 @@ events, `SDL_Renderer` with `FillRect` + textured quads + `SetClipRect`), `SDL2_
 ## Milestones (each ends in a runnable demo)
 
 ### M0 — A window that opens
-SDL2 window + event loop + clear-to-color + close on ✕. Minimal PFUI involvement; stand up
+SDL2 window + event loop + clear-to-color + close on ✕. Minimal WordUI involvement; stand up
 the SDL2 window/loop directly.
 **Exit:** a colored window you can close. *De-risks the one true unknown — does Beef+SDL2
 link and run here — before any framework code depends on it.*

@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // The build stack holds tagged items; every pop validates the tag so a misused
 // word fails with a named error instead of building a scrambled tree.

@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace PFUI;
+namespace WordUI;
 
 // The only widget class. Widgets are transient descriptions rebuilt on each
 // invalidate: identity + universal layout live here, every other property is a

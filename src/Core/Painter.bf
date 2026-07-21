@@ -2,7 +2,7 @@ using System;
 using SDL3;
 using SDL3_ttf;
 
-namespace PFUI;
+namespace WordUI;
 
 // Concrete drawing module over SDL_Renderer + SDL3_ttf. All SDL drawing
 // calls are localized here — no SDL types leak into the framework.

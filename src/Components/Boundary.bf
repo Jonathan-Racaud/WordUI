@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Strokes the widget's bounds with a solid color, width, and optional corner
 // radius. Attached by the Border() focusing word; drawn in the DrawOverlay

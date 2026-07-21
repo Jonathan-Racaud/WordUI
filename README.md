@@ -1,4 +1,4 @@
-# PFUI
+# WordUI
 
 An experimental UI framework for [Beef](https://www.beeflang.org/) that captures the
 essence of **concatenative programming** — inspired by [Factor](https://factorcode.org/)'s
@@ -7,7 +7,7 @@ UI vocabulary — inside an applicative language, without building an interprete
 UI is a sequence of **words** operating on an implicit widget stack:
 
 ```beef
-using static PFUI.UI;
+using static WordUI.UI;
 
 VStack(scope () => {
     Label("Title"); FontSize(24);
@@ -39,7 +39,7 @@ Canonical documentation lives in [`docs/`](docs/):
 
 ```sh
 BeefBuild
-./build/Debug_Linux64/PFUI/PFUI
+./build/Debug_Linux64/WordUI/WordUI
 ```
 
 Status: early experiment — word vocabulary, modifiers, styling, SDL3 rendering, hit-test, and

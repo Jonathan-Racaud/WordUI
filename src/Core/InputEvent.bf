@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Adapted SDL event at the framework boundary: SDL types never cross into
 // hit-testing, dispatch, or any tracker.

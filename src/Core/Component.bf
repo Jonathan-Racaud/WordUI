@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // The single inheritance point of the framework. A component carries one
 // capability's data and overrides framework hooks for its behavior. Framework

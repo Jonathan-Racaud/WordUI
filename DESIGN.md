@@ -1,11 +1,11 @@
-# PFUI — Design Notes
+# WordUI — Design Notes
 
 > **Canonical documentation is in [`docs/`](docs/).** This file remains the root-level source
 > of truth for architecture decisions but is no longer the sole reference. See
 > [`docs/concepts/`](docs/concepts/) for expanded explanations and
 > [`docs/design/decisions.mdx`](docs/design/decisions.mdx) for locked decisions with rationale.
 
-PFUI is an experiment: capture the *essence* of concatenative programming — Factor's UI
+WordUI is an experiment: capture the *essence* of concatenative programming — Factor's UI
 vocabulary in particular — inside Beef, an applicative language, without building an
 interpreter. UI is a sequence of **words** operating on an implicit widget stack.
 Rendering will be fully custom (Flutter-style, no native widgets); the current prototype
@@ -14,7 +14,7 @@ stops at tree construction and uses a console dump as the stand-in renderer.
 ## The shape
 
 ```beef
-using static PFUI.UI;
+using static WordUI.UI;
 
 VStack(scope () => {
     Label("Title"); FontSize(24);
@@ -50,7 +50,7 @@ VStack(scope () => {
    backend's identity is irrelevant, and a one-implementation abstraction is best *extracted*
    from working code later than *designed* blind now. The only discipline kept from the
    abandoned seam is **localization** (not abstraction): SDL2 drawing flows through one
-   concrete `Painter` module, and `SDL_Event` is adapted to a PFUI `InputEvent` at a single
+   concrete `Painter` module, and `SDL_Event` is adapted to a WordUI `InputEvent` at a single
    boundary, so the eventual abstraction is a mechanical extract-interface refactor rather
    than a rewrite. A build-your-own renderer (GL/software) is a far-future alternate backend.
 
@@ -73,7 +73,7 @@ is a component:
 **Why not widget subclasses, when Factor subclasses its gadgets?** Factor's gadgets are
 *retained, long-lived, stateful actors* — objects that own state and respond to events,
 which is what classes with behavior are for, and subclassing is Factor's dispatch
-mechanism (generic words dispatch on class). PFUI chose rebuild-on-invalidate, so its
+mechanism (generic words dispatch on class). WordUI chose rebuild-on-invalidate, so its
 widgets are *transient descriptions*: data records consumed by framework passes. Behavior
 polymorphism still needs a home — it moves one level down, to `Component`:
 
@@ -100,7 +100,7 @@ public on purpose (it is the documented extender surface):
 Every word — framework or user — is an `extension UI` block. Beef extensions add static
 methods, access private members, and work **across projects**, so an app can define its
 own words, components, and modifiers without touching the framework. `using static
-PFUI.UI;` exposes them all identically.
+WordUI.UI;` exposes them all identically.
 
 ### Stack-based construction (the word-author API)
 

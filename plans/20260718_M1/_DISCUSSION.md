@@ -13,7 +13,7 @@
 
 Much simpler: `TTF_RenderText_Blended` handles all glyph iteration and blending internally. Combine with `SDL_CreateTextureFromSurface` for one-call text→texture→render path.
 
-**Impact on plan:** Eliminated the need for a PFUI `Font` wrapper class. The `Painter` module directly uses `TTF_Font*` and the SDL3_ttf C API. Cut implementation from ~8 steps to ~5.
+**Impact on plan:** Eliminated the need for a WordUI `Font` wrapper class. The `Painter` module directly uses `TTF_Font*` and the SDL3_ttf C API. Cut implementation from ~8 steps to ~5.
 
 ## Font access pattern: static vs dependency injection
 

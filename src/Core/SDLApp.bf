@@ -2,7 +2,7 @@ using System;
 using SDL3;
 using SDL3_ttf;
 
-namespace PFUI;
+namespace WordUI;
 
 // SDL3-backed App: manages a window + renderer lifecycle, font loading,
 // layout pass, and rendering. Subclasses override Build() (from App) to
@@ -11,7 +11,7 @@ public abstract class SDLApp : App
 {
 	SDL_Window* mWindow;
 	SDL_Renderer* mRenderer;
-	String mTitle = new .("PFUI") ~ delete _;
+	String mTitle = new .("WordUI") ~ delete _;
 	int32 mWidth = 1024;
 	int32 mHeight = 768;
 	Color mClearColor = .(30, 30, 30, 255);

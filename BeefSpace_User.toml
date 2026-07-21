@@ -44,12 +44,12 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Button.bf"
-TabWidth = 91.0
+TabWidth = 81.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Widgets/Button.bf"
 CursorPos = 437
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Clickable.bf"
@@ -58,7 +58,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Components/Clickable.bf"
 CursorPos = 98
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "StackLayout.bf"
@@ -67,7 +67,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Components/StackLayout.bf"
 CursorPos = 227
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Spacer.bf"
@@ -75,7 +75,7 @@ TabWidth = 81.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Widgets/Spacer.bf"
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "TreeDump.bf"
@@ -84,7 +84,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Diagnostics/TreeDump.bf"
 CursorPos = 1078
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "App.bf"
@@ -93,7 +93,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/App.bf"
 CursorPos = 979
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "PressTracker.bf"
@@ -102,7 +102,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/PressTracker.bf"
 CursorPos = 953
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "HitTest.bf"
@@ -111,7 +111,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/HitTest.bf"
 CursorPos = 339
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "TextStyle.bf"
@@ -120,7 +120,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Components/TextStyle.bf"
 CursorPos = 696
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Size.bf"
@@ -129,7 +129,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Size.bf"
 CursorPos = 152
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Rect.bf"
@@ -138,17 +138,16 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Rect.bf"
 CursorPos = 199
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
 TabLabel = "Program.bf"
 TabWidth = 93.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Program.bf"
 CursorPos = 1027
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "SDLApp.bf"
@@ -157,8 +156,7 @@ TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/SDLApp.bf"
 CursorPos = 2162
-VertPos = 905.625
-ProjectName = "PFUI"
+ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]
 RequestedWidth = 250.0

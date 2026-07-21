@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace PFUI;
+namespace WordUI;
 
 // Rebuild-on-invalidate driver: `Build()` re-runs only after `Invalidate()`,
 // producing a fresh widget tree in a bump arena; the previous tree (widgets,

@@ -1,9 +1,9 @@
 ---
-title: PFUI
+title: WordUI
 description: An experimental concatenative UI framework for the Beef programming language
 ---
 
-PFUI is an experimental UI framework for [Beef](https://www.beeflang.org/) which captures the
+WordUI is an experimental UI framework for [Beef](https://www.beeflang.org/) which captures the
 essence of **concatenative programming** — inspired by [Factor](https://factorcode.org/)'s
 UI vocabulary — inside an applicative language, without building an interpreter. The goals
 behind this project is to try and bring Factor-style UI factoring to a statically-typed,
@@ -11,7 +11,7 @@ ahead-of-time compiled language so that widget construction becomes a sequence o
 operating on an implicit stack with zero parameter plumbing.
 
 ```beef
-using static PFUI.UI;
+using static WordUI.UI;
 
 VStack(scope () => {
     Label("Title"); FontSize(24);

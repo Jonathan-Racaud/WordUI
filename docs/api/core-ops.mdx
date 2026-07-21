@@ -93,7 +93,7 @@ Handlers only ever dispatch against the current tree, so this lifetime is safe.
 |---|---|
 | `Fail(word, msg)` | Print error with word name and message, dump the stack, call `Runtime.FatalError`. `[NoReturn]`. |
 
-All type-mismatch and stack-underflow errors route through `Fail`, so every PFUI error includes
+All type-mismatch and stack-underflow errors route through `Fail`, so every WordUI error includes
 a named word and a stack dump.
 
 ## Data primitives

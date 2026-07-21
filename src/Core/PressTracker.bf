@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Tracks mouse-down to mouse-up sequences and dispatches a Clickable handler
 // when the press and release happen on the same widget.

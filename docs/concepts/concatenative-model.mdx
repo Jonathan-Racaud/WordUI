@@ -1,19 +1,19 @@
 ---
 title: Concatenative Model
-description: How PFUI uses words and an implicit widget stack to build UIs without an interpreter
+description: How WordUI uses words and an implicit widget stack to build UIs without an interpreter
 ---
 
-PFUI ports Factor's concatenative UI vocabulary into Beef, an applicative language, without
+WordUI ports Factor's concatenative UI vocabulary into Beef, an applicative language, without
 building an interpreter. Instead, every word is a **static extension method** on the `UI`
-class, and `using static PFUI.UI;` brings them all into scope as bare words — Beef's own
+class, and `using static WordUI.UI;` brings them all into scope as bare words — Beef's own
 method resolution does the rest.
 
 ## Words and the implicit stack
 
-PFUI maintains a **thread-local widget stack** during `Build()`. Words push and pop values on this stack:
+WordUI maintains a **thread-local widget stack** during `Build()`. Words push and pop values on this stack:
 
 ```beef
-using static PFUI.UI;
+using static WordUI.UI;
 
 // "Hello" is pushed onto the stack, then Label() pops it and creates a widget
 Str("Hello");
@@ -55,7 +55,7 @@ with modifiers for free (see above).
 
 ## Hybrid data passing
 
-PFUI uses a **hybrid** convention:
+WordUI uses a **hybrid** convention:
 
 | Kind | Form | Example |
 |---|---|---|
@@ -113,6 +113,6 @@ extension UI
 }
 ```
 
-`using static MyApp.UI;` makes `TitleLabel("Hello")` available alongside every PFUI word,
+`using static MyApp.UI;` makes `TitleLabel("Hello")` available alongside every WordUI word,
 indistinguishable from built-in vocabulary. This is the framework's core payoff: factoring UI
 descriptions into named words with zero parameter plumbing.

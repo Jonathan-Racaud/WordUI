@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 
-namespace PFUI;
+namespace WordUI;
 
 // The core-op API every word is built from. Framework words live in extension
 // UI blocks (one file per concern under Widgets/, Modifiers/, Handlers/); app
@@ -265,9 +265,9 @@ public static class UI
 	[NoReturn]
 	public static void Fail(StringView word, StringView msg)
 	{
-		Console.WriteLine("PFUI error in word '{}': {}", word, msg);
+		Console.WriteLine("WordUI error in word '{}': {}", word, msg);
 		PrintStack();
-		Runtime.FatalError(scope $"PFUI: error in word '{word}': {msg}");
+		Runtime.FatalError(scope $"WordUI: error in word '{word}': {msg}");
 	}
 
 	// ---- Internals ----

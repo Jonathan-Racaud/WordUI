@@ -2,9 +2,9 @@ using System;
 using System.Collections;
 using System.Diagnostics;
 
-namespace PFUI;
+namespace WordUI;
 
-using static PFUI.UI;
+using static WordUI.UI;
 
 // Factored words: indistinguishable from framework words at the call site.
 static class Words
@@ -15,7 +15,7 @@ static class Words
 	}
 }
 
-using static PFUI.Words;
+using static WordUI.Words;
 
 // M2 demo: the counter UI is now clickable via real SDL mouse events.
 class CounterSDLApp : SDLApp

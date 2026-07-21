@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-PFUI is an experimental **concatenative UI framework** for the [Beef](https://www.beeflang.org/) language. It captures the essence of Factor's UI vocabulary — a sequence of **words** operating on an implicit widget stack — inside an applicative language without building an interpreter. The project is in early development; the current prototype stops at tree construction and uses a console dump as the stand-in renderer.
+WordUI is an experimental **concatenative UI framework** for the [Beef](https://www.beeflang.org/) language. It captures the essence of Factor's UI vocabulary — a sequence of **words** operating on an implicit widget stack — inside an applicative language without building an interpreter. The project is in early development; the current prototype stops at tree construction and uses a console dump as the stand-in renderer.
 
 ---
 
@@ -41,7 +41,7 @@ doc-website/               # Astro Starlight documentation site (reads from docs
 
 ```sh
 build                             # Build from workspace root (Debug Linux64)
-./build/Debug_Linux64/PFUI/PFUI   # Run the counter demo (console tree dump)
+./build/Debug_Linux64/WordUI/WordUI   # Run the counter demo (console tree dump)
 ```
 
 Diagnostics flags (run via the built binary):

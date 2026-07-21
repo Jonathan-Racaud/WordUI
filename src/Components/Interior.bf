@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Fills the widget's bounds with a solid color and an optional corner radius.
 // Attached by the Background() focusing word; drawn in the DrawBackground pass

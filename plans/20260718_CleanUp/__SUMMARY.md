@@ -54,7 +54,7 @@ injects with `extension Widget`. Modifiers query capability, not type — errors
 ## The ECS detour (explored, consciously not adopted)
 
 Seeing the `Components/` folder, the question arose: flat ECS UIs exist (research +
-Bevy) — and concatenative languages are "flat" too. Is PFUI converging on ECS? Buttons as
+Bevy) — and concatenative languages are "flat" too. Is WordUI converging on ECS? Buttons as
 composed primitives + behavior components (OnClick/OnHover/OnDrag words attaching
 Hoverable/Clickable/Dragable), animations later as systems + components, a small core with
 widgets as a separate package on top.
@@ -68,7 +68,7 @@ The critique that came out of stress-testing it:
   instead: both paradigms are anti-encapsulation — small orthogonal operations (words /
   systems) over open shared data (stack / stores), composed by ordering.
 - **ECS collides with rebuild-on-invalidate** (the big one). ECS assumes persistent
-  entities; PFUI throws the tree away per invalidate. Resolution if ever adopted: entity
+  entities; WordUI throws the tree away per invalidate. Resolution if ever adopted: entity
   ID = stable widget ID (parent path + call index + `Key`), build-scoped stores
   repopulated per rebuild, persistent stores (hover/press/tween/scroll) surviving keyed by
   the same IDs. ECS doesn't remove the retained-vs-rebuild decision; it sharpens it.
@@ -113,7 +113,7 @@ The honest analysis:
   exactly what behavior-carrying classes are for; (c) their subclassing is already open
   extension (no framework edits) — so "inheritance is un-concatenative" is *not* a valid
   argument, and the earlier "improvement on Factor" framing was retracted.
-- It doesn't transfer because PFUI chose rebuild-on-invalidate: its widgets are
+- It doesn't transfer because WordUI chose rebuild-on-invalidate: its widgets are
   **transient descriptions**, not actors — Flutter's regime, where dumb-data widgets are
   the standard shape.
 - **The bag does not eliminate dispatch — it relocates it.** Per-kind behavior (measure,

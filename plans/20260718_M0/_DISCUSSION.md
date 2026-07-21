@@ -2,12 +2,12 @@
 
 ## Should we use SDL2.SDLApp as a base class?
 
-**Proposal:** Use the existing `SDL2.SDLApp` scaffold from the BeefLibs SDL2 package as the basis for `PFUI.SDLApp`.
+**Proposal:** Use the existing `SDL2.SDLApp` scaffold from the BeefLibs SDL2 package as the basis for `WordUI.SDLApp`.
 
 **Analysis of SDL2.SDLApp:**
 - Provides: window + renderer creation, event loop, input dispatch (KeyDown, MouseDown, etc.), resize handling, 60Hz fixed-timestep with catch-up ticks, SDLImage/SDLMixer/SDLTTF init, letterboxing/scaling
 - Game-loop semantics: `Update()` called every frame, render every frame — burns CPU regardless of UI changes
-- ~470 lines, most irrelevant to PFUI (Image, Sound, Font, BMFont classes bundled inline)
+- ~470 lines, most irrelevant to WordUI (Image, Sound, Font, BMFont classes bundled inline)
 
 **Decision: Do not use SDL2.SDLApp.** Write minimal direct SDL calls (~80 lines). Rationale:
 - The fixed-timestep game loop is the wrong model for a GUI (redraw-on-demand vs. render-every-frame)
@@ -25,11 +25,11 @@
 - `SDL_CreateWindowAndRenderer` combines window + renderer creation in one call
 - `SDL_Event` is a C union (`event.type` is `uint32`, compare with `SDL_EventType.SDL_EVENT_QUIT`)
 - `SDL_PollEvent(&event)` takes a pointer, returns bool
-- No `SDL_Color` struct — cleanly forces use of PFUI's own `Color`
+- No `SDL_Color` struct — cleanly forces use of WordUI's own `Color`
 
-## Color type: backend-specific vs. PFUI-native
+## Color type: backend-specific vs. WordUI-native
 
-**Decision:** Use `PFUI.Color` (already exists in `src/Core/Color.bf`) for the clear color property. Keeps SDLApp backend-agnostic at the property boundary; the render path does the trivial `mClearColor.R/G/B/A` pass-through to `SDL_SetRenderDrawColor`.
+**Decision:** Use `WordUI.Color` (already exists in `src/Core/Color.bf`) for the clear color property. Keeps SDLApp backend-agnostic at the property boundary; the render path does the trivial `mClearColor.R/G/B/A` pass-through to `SDL_SetRenderDrawColor`.
 
 ## Build tool restriction
 

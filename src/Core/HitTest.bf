@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // Shared hit-test utility: given a point in window coordinates, walks the
 // widget tree and returns the leaf-most widget whose mRect contains the

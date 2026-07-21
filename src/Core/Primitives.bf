@@ -1,6 +1,6 @@
 using System;
 
-namespace PFUI;
+namespace WordUI;
 
 // The primitive data words, mirroring the PopStr/PopInt/PopFloat/PopBool core
 // ops. Bare `Int(…)`/`Float(…)` words are impossible in Beef: Int and Float

@@ -38,4 +38,4 @@ Additionally, alignment properties are orthogonal — `Center()` and a hypotheti
 
 **Analysis:** `Widget.Attach` rejects duplicate component types, so a naive "create and attach" on every call would fail on the second alignment word. The solution: check `Get<LayoutHint>()` first; if null, `new:BuildAlloc LayoutHint()` + `Attach()`; then set the field. This is a new pattern in the codebase but a natural third option alongside `Require` and `ReplaceComponent`.
 
-**Decision:** Each alignment word inlines the GetOrCreate logic. A shared helper was considered but would lose the word-specific error message in `Top("word")` — inlining keeps error messages precise (e.g., "PFUI error in word 'Center': stack is empty").
+**Decision:** Each alignment word inlines the GetOrCreate logic. A shared helper was considered but would lose the word-specific error message in `Top("word")` — inlining keeps error messages precise (e.g., "WordUI error in word 'Center': stack is empty").
