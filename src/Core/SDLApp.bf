@@ -64,36 +64,54 @@ public abstract class SDLApp : App
 	// and draws each widget at its layout rect.
 	private void Draw()
 	{
-		DrawWidget(Root);
+		DrawWidget(Root, 0, 0);
 	}
 
-	void DrawWidget(Widget w)
+	// (ox,oy) is the accumulated render-time offset from an ancestor drag. When
+	// this widget is the one being dragged, its own offset is added and inherited
+	// by its subtree — the visual follows the pointer without any relayout.
+	void DrawWidget(Widget w, float ox, float oy)
 	{
 		if (w == null)
 			return;
 
+		var ox, oy;
+		if (Store.DragActive && w.StableKey == Store.DragKey)
+		{
+			let (dx, dy) = Store.DragOffset(w.StableKey);
+			ox += dx; oy += dy;
+		}
+
+		Rect bounds = .(w.mRect.X + ox, w.mRect.Y + oy, w.mRect.Width, w.mRect.Height);
+
 		// 1. Background — fills behind everything (Interior)
 		for (let c in w.Components)
-			c.DrawBackground(mPainter, w, w.mRect);
+			c.DrawBackground(mPainter, w, bounds);
 
 		// 2. Content — widget's own content (TextStyle, custom drawing)
 		for (let c in w.Components)
-			c.DrawContent(mPainter, w, w.mRect);
+			c.DrawContent(mPainter, w, bounds);
 
-		// 3. Children — recurse
+		// 3. Children — recurse (inherit the drag offset)
 		let children = w.GetComponent<Children>();
 		if (children != null)
 		{
 			for (let child in children.Items)
-				DrawWidget(child);
+				DrawWidget(child, ox, oy);
 		}
 
 		// 4. Overlay — strokes on top of content and children (Boundary)
 		for (let c in w.Components)
-			c.DrawOverlay(mPainter, w, w.mRect);
+			c.DrawOverlay(mPainter, w, bounds);
 	}
 
 	// Enter the event loop. Returns when the window is closed.
+	//
+	// Frame-batched and event-driven: when nothing is animating or dragging the
+	// loop BLOCKS in SDL_WaitEvent (true zero idle CPU); while a transition or
+	// drag is in flight it uses a ~16ms timeout as a frame clock. After each wake
+	// it drains all pending events (coalescing motion), advances animation
+	// clocks, then rebuilds+lays-out only on mDirty, else repaints only.
 	public void Run()
 	{
 		RebuildIfNeeded();
@@ -105,38 +123,89 @@ public abstract class SDLApp : App
 		SDL_Event event = .();
 		while (!quit)
 		{
+			// Block when idle; tick at ~60fps while animating/dragging.
+			if (Store.NeedsTick)
+			{
+				if (SDL_WaitEventTimeout(&event, 16))
+					HandleEvent(event, ref quit);
+			}
+			else if (SDL_WaitEvent(&event))
+			{
+				HandleEvent(event, ref quit);
+			}
+
+			// Drain the rest of the queue, coalescing motion to the last position.
+			bool hadMotion = false;
+			float motionX = 0, motionY = 0;
 			while (SDL_PollEvent(&event))
 			{
-				switch (event.type)
+				if (event.type == (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION)
 				{
-				case (uint32)SDL_EventType.SDL_EVENT_QUIT:
-					quit = true;
-				case (uint32)SDL_EventType.SDL_EVENT_WINDOW_RESIZED:
-					mWidth = (int32)event.window.data1;
-					mHeight = (int32)event.window.data2;
-					Invalidate();
-				case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
-					if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
-					{
-							InputEvent input = .() { Type = .MouseDown, X = event.button.x, Y = event.button.y };
-						PressTracker.HandleEvent(Root, input);
-					}
-				case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
-					if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
-					{
-							InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
-						PressTracker.HandleEvent(Root, input);
-					}
-				default:
+					hadMotion = true;
+					motionX = event.motion.x; motionY = event.motion.y;
+					continue;
 				}
+				HandleEvent(event, ref quit);
 			}
+			if (hadMotion)
+				HandleMotion(motionX, motionY);
+
+			// Advance animation clocks against wall-clock time.
+			Store.Tick((int)SDL_GetTicks());
 
 			if (RebuildIfNeeded())
 			{
 				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
 				Render();
 			}
+			else if (NeedsRepaint || Store.NeedsTick)
+			{
+				Render();
+				ClearRepaint();
+			}
 		}
+	}
+
+	void HandleEvent(SDL_Event event, ref bool quit)
+	{
+		switch (event.type)
+		{
+		case (uint32)SDL_EventType.SDL_EVENT_QUIT:
+			quit = true;
+		case (uint32)SDL_EventType.SDL_EVENT_WINDOW_RESIZED:
+			mWidth = (int32)event.window.data1;
+			mHeight = (int32)event.window.data2;
+			Invalidate();
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION:
+			HandleMotion(event.motion.x, event.motion.y);
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+			{
+				if (!DragTracker.HandleDown(Root, event.button.x, event.button.y))
+				{
+					InputEvent input = .() { Type = .MouseDown, X = event.button.x, Y = event.button.y };
+					PressTracker.HandleEvent(Root, input);
+				}
+			}
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+			{
+				if (Store.DragActive)
+					DragTracker.HandleUp();
+				InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
+				PressTracker.HandleEvent(Root, input);
+			}
+		default:
+		}
+	}
+
+	// A drag capture takes precedence over hover updates while it is active.
+	void HandleMotion(float x, float y)
+	{
+		if (Store.DragActive)
+			DragTracker.HandleMotion(Root, x, y);
+		else
+			HoverTracker.HandleMotion(Root, x, y);
 	}
 
 	private void Render()

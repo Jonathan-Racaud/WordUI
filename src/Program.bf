@@ -42,8 +42,15 @@ class CounterSDLApp : SDLApp
 			HStack(scope () => {
 				Button("+"); {
 					TextColor(.White);
+					// Hover fades the fill in/out (resolved at draw, no rebuild);
+					// press is an instant override that composes on top.
+					IfHover(scope () => {
+						Transition(500, scope () => {
+							Fill(.(70, 110, 70, 255));
+						});
+					});
 					IfPressed(scope () => {
-						Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+						Fill(.(120, 120, 120, 255));
 					});
 					OnClick(new () => { mCount++; Invalidate(); });
 				} FixedSize(120, 20); Center();

@@ -21,11 +21,13 @@ extension UI
 {
 	public static void TextColor(Color c)
 	{
+		if (RecordTextColor(c)) return;
 		Top("TextColor").RequireProperty<TextStyleProperty>("TextColor").TextColor = c;
 	}
 
 	public static void FontSize(float px)
 	{
+		if (RecordFontSize(px)) return;
 		Top("FontSize").RequireProperty<TextStyleProperty>("FontSize").FontSize = px;
 	}
 }

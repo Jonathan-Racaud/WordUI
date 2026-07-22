@@ -19,11 +19,12 @@ public class Interior : Component
 
 	public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
 	{
-		if (FillColor.A == 0)
+		let fill = StyleResolve.Color(widget, FillColor, .Fill);
+		if (fill.A == 0)
 			return;
 		if (Radius > 0)
-			painter.FillRoundRect(bounds, Radius, FillColor);
+			painter.FillRoundRect(bounds, Radius, fill);
 		else
-			painter.FillRect(bounds, FillColor);
+			painter.FillRect(bounds, fill);
 	}
 }

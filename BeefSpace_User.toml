@@ -1,7 +1,7 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Core/SDLApp.bf", "src/Core/PressTracker.bf", "src/Core/Widget.bf", "src/Program.bf", "src/Widgets/Label.bf", "src/Core/Component.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Program.bf", "src/Core/SDLApp.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
@@ -43,50 +43,23 @@ DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
 TabLabel = "SDLApp.bf"
-TabWidth = 96.0
+TabWidth = 86.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/SDLApp.bf"
-CursorPos = 2357
+CursorPos = 3313
 VertPos = 1254.375
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "PressTracker.bf"
-TabWidth = 115.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/PressTracker.bf"
-CursorPos = 806
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+Active = true
 TabLabel = "Program.bf"
 TabWidth = 93.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Program.bf"
-CursorPos = 1084
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Component.bf"
-TabWidth = 108.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/Component.bf"
-CursorPos = 1355
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Label.bf"
-TabWidth = 73.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Widgets/Label.bf"
-CursorPos = 351
+CursorPos = 1320
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]

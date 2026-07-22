@@ -1,68 +1,61 @@
 using System;
-using System.Collections;
 
 namespace WordUI;
 
-// Tracks mouse-down to mouse-up sequences and dispatches a Clickable handler
-// when the press and release happen on the same widget. Also exposes IsPressed
-// for build-time conditional words (IfPressed).
+// Press/click dispatch, keyed by StableKey in the persistent InteractionStore.
+// Storing a key (not a Widget*) is what fixes the missed/delayed clicks: the
+// key stays valid across the arena teardown a rebuild performs, so a down in
+// one frame and an up several frames (and rebuilds) later still match.
+//
+// Press no longer triggers a rebuild — it sets store state and requests a
+// repaint, so IfPressed feedback resolves at draw with no tree teardown.
 static class PressTracker
 {
-	static Dictionary<int32, bool> sPressed = new .() ~ delete _;
-	static Widget sPressedWidget;   // widget ref for handler dispatch on mouse-up
+	static int sPressedKey = 0;   // 0 = nothing pressed
+	static bool sPressedClickable;
 
-	// Returns true if the event was consumed (handler fired).
 	public static bool HandleEvent(Widget root, InputEvent event)
 	{
+		let store = App.Instance.Store;
+
 		if (event.Type == .MouseDown)
 		{
 			let hit = HitTest.At(root, event.X, event.Y);
-			if (hit != null && hit.GetBehavior<OnClickBehavior>()?.Handler != null)
-				sPressedWidget = hit;
-			else
-				sPressedWidget = null;
-
-			if (hit != null)
+			if (hit == null)
 			{
-				sPressed[hit.BuildIndex] = true;
-				App.Instance?.Invalidate();
+				sPressedKey = 0;
+				return false;
 			}
+			sPressedKey = hit.StableKey;
+			sPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
+			store.SetPress(sPressedKey, true);
+			App.Instance.RequestRepaint();
 			return false;
 		}
 
 		if (event.Type == .MouseUp)
 		{
-			// Clear press state for the previously pressed widget
-			if (sPressedWidget != null)
-			{
-				sPressed[sPressedWidget.BuildIndex] = false;
-				App.Instance?.Invalidate();
-			}
-
-			if (sPressedWidget == null)
+			if (sPressedKey == 0)
 				return false;
 
+			store.SetPress(sPressedKey, false);
+			App.Instance.RequestRepaint();
+
 			let released = HitTest.At(root, event.X, event.Y);
-			if (released == sPressedWidget)
+			bool fired = false;
+			if (sPressedClickable && released != null && released.StableKey == sPressedKey)
 			{
-				let clickable = sPressedWidget.GetBehavior<OnClickBehavior>();
+				let clickable = released.GetBehavior<OnClickBehavior>();
 				if (clickable != null && clickable.Handler != null)
 				{
-					sPressedWidget = null;
-					App.Instance?.Invalidate();
-					clickable.Handler();
-					return true;
+					clickable.Handler();   // may Invalidate() for app-data changes
+					fired = true;
 				}
 			}
-			sPressedWidget = null;
-			return false;
+			sPressedKey = 0;
+			return fired;
 		}
 
 		return false;
-	}
-
-	public static bool IsPressed(int32 buildIndex)
-	{
-		return sPressed.GetValueOrDefault(buildIndex);
 	}
 }

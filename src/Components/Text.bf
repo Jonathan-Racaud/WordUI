@@ -33,7 +33,8 @@ public class TextComponent : Component
 			return;
 
 		var ts = widget.GetProperty<TextStyleProperty>();
-		Color color = ts != null ? ts.TextColor : .Black;
+		Color baseColor = ts != null ? ts.TextColor : .Black;
+		Color color = StyleResolve.Color(widget, baseColor, .TextColor);
 		painter.DrawText(Content, bounds.X, bounds.Y, color);
 	}
 }

@@ -20,11 +20,13 @@ public class Boundary : Component
 
 	public override void DrawOverlay(Painter painter, Widget widget, Rect bounds)
 	{
-		if (StrokeColor.A == 0 || StrokeWidth <= 0)
+		let stroke = StyleResolve.Color(widget, StrokeColor, .Stroke);
+		let width = StyleResolve.Float(widget, StrokeWidth, .StrokeWidth);
+		if (stroke.A == 0 || width <= 0)
 			return;
 		if (Radius > 0)
-			painter.DrawRoundRect(bounds, Radius, StrokeWidth, StrokeColor);
+			painter.DrawRoundRect(bounds, Radius, width, stroke);
 		else
-			painter.DrawRect(bounds, StrokeColor);
+			painter.DrawRect(bounds, stroke);
 	}
 }

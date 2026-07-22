@@ -2,19 +2,26 @@ using System;
 
 namespace WordUI;
 
-// Tag interface for interaction states that can be queried by IfActive<T>.
-// Implementations read from a tracker (PressTracker, HoverTracker, etc.)
-// and return the current boolean state for the widget at CurrentBuildPosition().
+// Interaction states are Properties that report, for a given widget identity,
+// whether they are currently active. The draw-time resolver queries this to
+// decide whether a recorded StatePatch applies. Implementations read from a
+// tracker in the persistent InteractionStore (keyed by StableKey), so state
+// survives rebuilds and never touches a freed Widget*.
+//
+// StateId must be a stable, unique small int per state type: it keys the
+// animation clock so a transition keeps its progress across rebuilds. User
+// states pick their own id (framework reserves 1..99).
 public interface IInteractionState
 {
-	bool IsActive { get; }
+	int StateId { get; }
+	bool IsActiveFor(int ownerKey);
 }
 
-// A Property that queries PressTracker.IsPressed for the current widget.
-// Attached on demand by IfPressed; rebuild-safe (re-attachment is idempotent).
+// Active while the widget at ownerKey is being pressed.
 public class PressState : Property, IInteractionState
 {
-	public bool IsActive => PressTracker.IsPressed(UI.CurrentBuildPosition());
+	public int StateId => 1;
+	public bool IsActiveFor(int ownerKey) => App.Instance.Store.IsPressed(ownerKey);
 
 	public override void Describe(String buf)
 	{
@@ -24,23 +31,6 @@ public class PressState : Property, IInteractionState
 
 extension UI
 {
-	// Generic conditional: attaches T to the stack-top widget (if absent),
-	// then runs body only when T.IsActive is true. Rebuild-safe: the first
-	// build creates T, subsequent rebuilds find it via GetProperty.
-	public static void IfActive<T>(delegate void() body)
-		where T : Property, IInteractionState
-	{
-		let w = Top("IfActive");
-		var s = w.GetProperty<T>();
-		if (s == null)
-		{
-			s = new:BuildAlloc T();
-			w.AttachProperty(s);
-		}
-		if (s.IsActive)
-			body();
-	}
-
-	// Convenience: runs body while the stack-top widget is being pressed.
+	// Convenience: records the enclosed styling while the widget is pressed.
 	public static void IfPressed(delegate void() body) => IfActive<PressState>(body);
 }

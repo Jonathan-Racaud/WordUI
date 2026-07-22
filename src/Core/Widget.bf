@@ -10,9 +10,9 @@ namespace WordUI;
 public sealed class Widget
 {
 	public StringView Name;   // word-provided literal, e.g. "Label"; used by errors and dump
-	public int Key = -1;
+	public int Key = -1;      // optional user identity hint (list items); feeds StableKey
 	public float Padding;
-	public int32 BuildIndex;  // assigned by NewWidget; stable per-build identity for trackers
+	public int StableKey;     // persistent identity across rebuilds; assigned by KeyAssign post-build
 	public Rect mRect;        // assigned by the layout pass; transient (freed with arena)
 
 	List<Component> mComponents;

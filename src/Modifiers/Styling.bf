@@ -27,6 +27,10 @@ extension UI
 
 	public static void Background(delegate void() body)
 	{
+		// Inside a state body there is no pen to open; the enclosed Fill/Radius
+		// record onto the patch instead. (Radius is not yet an animatable field
+		// and is ignored in patch mode.)
+		if (InPatch) { body(); return; }
 		_Interior();
 		body();
 		Interior_();
@@ -51,6 +55,7 @@ extension UI
 
 	public static void Border(delegate void() body)
 	{
+		if (InPatch) { body(); return; }
 		_Border();
 		body();
 		Border_();
@@ -60,6 +65,7 @@ extension UI
 
 	public static void Fill(Color c)
 	{
+		if (RecordFill(c)) return;
 		let pen = TopPen("Fill");
 		let i = pen as Interior;
 		if (i == null)
@@ -69,6 +75,7 @@ extension UI
 
 	public static void Stroke(Color c)
 	{
+		if (RecordStroke(c)) return;
 		let pen = TopPen("Stroke");
 		let b = pen as Boundary;
 		if (b == null)
@@ -78,6 +85,7 @@ extension UI
 
 	public static void Radius(float r)
 	{
+		if (InPatch) return;   // radius is not an animatable patch field yet
 		let pen = TopPen("Radius");
 		let i = pen as Interior;
 		if (i != null)
@@ -94,6 +102,7 @@ extension UI
 
 	public static void StrokeWidth(float w)
 	{
+		if (RecordStrokeWidth(w)) return;
 		let pen = TopPen("StrokeWidth");
 		let b = pen as Boundary;
 		if (b == null)

@@ -18,27 +18,12 @@ public static class UI
 	[ThreadStatic]
 	static List<StackItem> sStack;
 
-	static List<ClickHandler> sHandlers;
+	static List<Delegate> sHandlers;
 
 	// The build arena: everything a word allocates (widgets, components,
 	// strings) goes through `new:BuildAlloc` and dies wholesale on rebuild.
 	// Valid only between BeginBuild and EndBuild.
 	public static BumpAllocator BuildAlloc;
-
-	static int32 sBuildIndex;
-
-	// Returns the BuildIndex of the stack-top widget. Used by interaction
-	// state components to query trackers without allocation.
-	public static int32 CurrentBuildPosition()
-	{
-		if (Stack.IsEmpty)
-			Fail("CurrentBuildPosition", "stack is empty");
-		if (Stack.Back case .Elem(let w))
-			return w.BuildIndex;
-		let s = scope String();
-		Stack.Back.ToString(s);
-		Fail("CurrentBuildPosition", scope $"stack top is {s}, not a widget");
-	}
 
 	static ~this()
 	{
@@ -57,12 +42,11 @@ public static class UI
 
 	// ---- Build lifecycle (called by App, not by word code) ----
 
-	public static void BeginBuild(BumpAllocator arena, List<ClickHandler> handlers)
+	public static void BeginBuild(BumpAllocator arena, List<Delegate> handlers)
 	{
 		Runtime.Assert(BuildAlloc == null, "BeginBuild called while another build is active");
 		BuildAlloc = arena;
 		sHandlers = handlers;
-		sBuildIndex = 0;
 		if (!Stack.IsEmpty)
 			Fail("BeginBuild", "stack not empty at start of build — a previous build leaked items");
 	}
@@ -174,7 +158,6 @@ public static class UI
 			new:BuildAlloc List<Component>(),
 			new:BuildAlloc List<Property>(),
 			new:BuildAlloc List<Behavior>());
-		w.BuildIndex = sBuildIndex++;
 		Stack.Add(.Elem(w));
 		return w;
 	}
@@ -286,7 +269,7 @@ public static class UI
 
 	// Framework takes ownership; freed on the next rebuild. Handlers only ever
 	// run against the current tree, so this lifetime is safe.
-	public static void RegisterHandler(ClickHandler h)
+	public static void RegisterHandler(Delegate h)
 	{
 		sHandlers.Add(h);
 	}
