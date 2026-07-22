@@ -29,7 +29,7 @@ class StatePatch
 }
 
 // One recorded patch plus the state that gates it. `State.IsActiveFor(key)`
-// (read from the InteractionStore at draw) decides whether/how strongly the
+// (read from the retained Node at draw) decides whether/how strongly the
 // patch applies.
 struct PatchRecord
 {

@@ -3,7 +3,7 @@ using System;
 namespace WordUI;
 
 // Marker component: a widget carrying a ScrollView offsets its children along its
-// StackLayout axis by a persistent scroll offset stored in the InteractionStore
+// StackLayout axis by a persistent scroll offset stored in the retained Node
 // (keyed by StableKey, so it survives rebuilds — the M4 exit criterion). The
 // offset is folded into the render-time (ox,oy) in SDLApp.DrawWidget, reusing the
 // exact translation mechanism drag already uses; no relayout happens.

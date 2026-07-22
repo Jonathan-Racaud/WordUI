@@ -5,7 +5,7 @@ namespace WordUI;
 // Draw-time style resolution. Drawing components call these with their base
 // value; the resolver blends every active (or still-animating) patch over it,
 // field by field, so concurrent states compose. Animated fields interpolate via
-// the persistent clock in the InteractionStore, which is what lets a transition
+// the persistent clock in the retained Node tree, which is what lets a transition
 // survive a rebuild and keep the frame loop ticking.
 enum ColorField { Fill, Stroke, TextColor }
 enum FloatField { FontSize, StrokeWidth }

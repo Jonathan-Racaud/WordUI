@@ -19,7 +19,7 @@ extension UI
 
 	// Always runs body, recording a patch tagged with state T. Whether the patch
 	// applies (and how strongly, when animated) is decided at draw by
-	// T.IsActiveFor(widget.StableKey) against the InteractionStore.
+	// T.IsActiveFor(widget.StableKey) against the retained Node tree.
 	public static void IfActive<T>(delegate void() body)
 		where T : Property, IInteractionState
 	{

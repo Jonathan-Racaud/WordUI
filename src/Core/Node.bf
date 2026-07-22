@@ -175,13 +175,13 @@ public class Node
 
 	// ---- Lifecycle ----
 
+	// Dispose this node's own resources (state dictionary, clocks). Children
+	// are NOT recursively disposed here: the orphan loop in App.ReconcileTree
+	// disposes every orphaned Node individually. A reused child is reattached
+	// via ReconcileWidget, which calls Children.Clear() first to drop the old
+	// reference. Recursing here would double-free orphaned children.
 	public void Dispose()
 	{
-		for (let child in Children)
-		{
-			child.Dispose();
-			delete child;
-		}
 		Children.Clear();
 	}
 
