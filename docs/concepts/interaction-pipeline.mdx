@@ -1,0 +1,162 @@
+---
+title: Interaction Pipeline
+description: The draw-time-resolved interaction model — stable keys, a persistent store, state patches, transitions, and drag
+---
+
+Interaction in WordUI — press, hover, drag, and animation — is **event-driven and resolved
+at draw time**, not by rebuilding the tree per state change. A state body like `IfHover`
+always runs during `Build()`, but instead of mutating base components it records a
+field-level **patch**; the draw pass blends the active patches over the base values, field
+by field. Interaction state, animation clocks, and drag capture live in a **persistent
+store** that outlives the build arena, so a hover fade at `t=0.1s` keeps running even when
+app data changes and the tree is torn down and rebuilt.
+
+This replaces the earlier busy-poll, rebuild-per-state model. The result is ~0% idle CPU
+(the loop blocks when nothing is happening), no missed clicks (identity no longer rides a
+dangling `Widget*`), and concurrent states that compose instead of clobbering each other.
+
+## Stable identity: `StableKey`
+
+Persistent interaction state can't be keyed by a `Widget*` — every rebuild frees the whole
+tree and allocates a new one, so the pointer would dangle. Instead, after each build
+`KeyAssign` (in `src/Core/KeyAssign.bf`) walks the finished tree and assigns each widget a
+`StableKey`: a path hash of `hash(parentKey, Name, discriminator)`, where the discriminator
+is the author's `Key()` hint when set (e.g. a list-item index) or the sibling ordinal
+otherwise.
+
+The same logical widget gets the same key across rebuilds as long as the build structure is
+stable, so the store re-associates its state after a rebuild. This is what structurally
+fixes the dangling-pointer missed/delayed clicks the old positional `BuildIndex` scheme had.
+
+## The persistent store: `InteractionStore`
+
+`InteractionStore` (in `src/Core/InteractionStore.bf`) is owned by `App` and **not** part of
+the build arena, so it survives every rebuild. It holds, all keyed by `StableKey`:
+
+- **Hover / press booleans** — set by the trackers, queried by state properties at draw.
+- **Animation clocks** — one per `(widget, stateId)`, an eased progress `p ∈ [0,1]` that
+  advances toward `1` while the state is active and toward `0` while inactive, so
+  interrupting or reversing a transition mid-flight stays smooth.
+- **Drag capture** — the currently-captured key plus its accumulated offset.
+
+## State bodies record patches
+
+State words are built on one generic primitive, `IfActive<T>` (in `src/Core/Interaction.bf`),
+where `T` is a `Property` implementing `IInteractionState`:
+
+```beef
+public static void IfActive<T>(delegate void() body)
+    where T : Property, IInteractionState
+```
+
+`IfActive<T>` get-or-creates the state property `T` on the stack-top widget, then runs
+`body` **unconditionally** with a fresh `StatePatch` as the active recording target. While a
+patch is active, styling words (`Fill`, `Stroke`, `StrokeWidth`, `TextColor`, `FontSize`)
+don't mutate the base components — they record the individual field they touched onto the
+patch and early-return. The recorded patch is stored on the widget's `InteractionStyle`
+property, tagged with the state that gates it.
+
+The two convenience words are just `IfActive` specializations:
+
+```beef
+public static void IfPressed(delegate void() body) => IfActive<PressState>(body);
+public static void IfHover(delegate void() body)   => IfActive<HoverState>(body);
+```
+
+### Why patches, not layers
+
+An earlier plan used **interaction layers**: a state cloned a whole property and replaced it
+wholesale. That was boolean-only, whole-property, and timeless — two concurrently-active
+states couldn't compose, because one clobbered the other. A `StatePatch` records only the
+fields the body touched, so `hover → FontSize` and `focus → TextColor` on the same widget
+**compose** at draw. Patches also carry a duration and curve, which is what makes animation
+possible.
+
+## Draw-time resolution
+
+Drawing components don't read base fields directly — they ask `StyleResolve`
+(in `src/Core/StyleResolve.bf`) for the resolved value:
+
+```beef
+let fill = StyleResolve.Color(widget, baseFill, .Fill);
+```
+
+For each recorded patch that touches the requested field, the resolver asks the gating state
+`IsActiveFor(widget.StableKey)`. For a non-animated field the blend factor is `1` (active)
+or `0` (inactive); for an animated field it's the eased clock value from the store. The
+resolver `Lerp`s the running result toward the patch's target by that factor, so multiple
+active patches blend in sequence — concurrent states compose field by field.
+
+## Animation: `Transition`
+
+Nothing animates unless asked. Wrapping recording words in a `Transition` marks those fields
+as animated and sets the shared duration/curve for the patch:
+
+```beef
+Button("+");
+IfHover(scope () => {
+    Transition(150, scope () => {
+        Fill(.(90, 90, 90, 255));   // fades in over 150ms on hover
+    });
+});
+```
+
+`Transition(ms, body)` defaults to `.EaseInOut`; an overload takes an explicit `Easing`
+(`Linear`, `EaseInOut`, `Spring`). The animated field interpolates via the persistent clock
+in the store, which is exactly what lets a transition **survive a rebuild** and keep the
+frame loop ticking until it settles. Outside a state body, `Transition` is a transparent
+pass-through.
+
+## Drag
+
+`OnDrag` makes the stack-top widget draggable. On press over it, `DragTracker` begins a
+**pointer capture** in the store keyed by `StableKey`; while captured, all motion routes to
+that widget's handler regardless of what the pointer is over. The handler receives the
+incremental delta each move:
+
+```beef
+Button("drag me");
+OnDrag(new (dx, dy) => { mX += dx; mY += dy; Invalidate(); });
+```
+
+The visual follows via a **render-time offset** applied in `SDLApp.DrawWidget` — no relayout,
+no rebuild. Live reflow (dragging that pushes other widgets around) is a later phase behind
+the same tracker seam.
+
+## The event loop: block when idle, tick when animating
+
+Because interaction is resolved at draw, the frame loop doesn't need to spin. When nothing is
+happening it **blocks in `SDL_WaitEvent`** — true ~0% idle CPU. While a transition or drag is
+in flight (`InteractionStore.NeedsTick`), it switches to a ~16ms `SDL_WaitEventTimeout` frame
+clock so animation advances smoothly. After each wake it processes input, advances the
+animation clocks (`Store.Tick`), then:
+
+- **rebuilds + lays out** only if app data changed (`mDirty`, set by `Invalidate()`), or
+- **repaints only** if a visual-only change happened (`mNeedsRepaint`, set by
+  `RequestRepaint()`), reusing the existing tree with no arena teardown and no layout.
+
+Hover, press, and drag call `RequestRepaint()`, never `Invalidate()` — this is the
+**repaint-vs-rebuild split**. See the [Rebuild Model](/concepts/rebuild-model) for how the
+two paths relate.
+
+## Authoring a new interaction state
+
+Any `Property` that implements `IInteractionState` can power a conditional state:
+
+```beef
+public class FocusState : Property, IInteractionState
+{
+    public int StateId => 3;   // stable, unique small int (framework reserves 1..99)
+    public bool IsActiveFor(int ownerKey) => App.Instance.Store.IsFocused(ownerKey);
+    public override void Describe(String buf) => buf.Append(" focus");
+}
+
+extension UI
+{
+    public static void IfFocused(delegate void() body) => IfActive<FocusState>(body);
+}
+```
+
+`StateId` must be stable and unique per state type — it keys the animation clock so a
+transition keeps its progress across rebuilds. `IsActiveFor` reads whatever tracker in the
+`InteractionStore` owns that state's boolean.

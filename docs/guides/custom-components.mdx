@@ -124,6 +124,24 @@ extension UI
 }
 ```
 
+### Making a draw hook interaction-aware (optional)
+
+The example above draws `FillColor` directly, so it ignores interaction states. To let states
+like `IfHover`/`IfPressed` recolor your component at draw, ask `StyleResolve` for the resolved
+value instead of reading the field raw — the framework's own `Interior`, `Boundary`, and
+`TextComponent` do exactly this:
+
+```beef
+public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+{
+    let fill = StyleResolve.Color(widget, FillColor, .Fill);   // base → blended patches
+    painter.FillRect(bounds, fill);
+}
+```
+
+`StyleResolve` blends any active `StatePatch` deltas (including animated ones) over your base
+value. See the [Interaction Pipeline](/concepts/interaction-pipeline) for the full model.
+
 ## The get-or-create rule
 
 Always use `Get*<T>()` first and create only if null. This ensures:

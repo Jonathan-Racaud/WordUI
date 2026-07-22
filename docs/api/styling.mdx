@@ -128,3 +128,26 @@ Button("Styled");
 Background(scope () => { Fill(.Blue); Radius(8); });
 Border(scope () => { Stroke(.White); StrokeWidth(2); Radius(8); });
 ```
+
+## Inside a state body (patch mode)
+
+These same words behave differently when they run inside an interaction state body
+(`IfHover`, `IfPressed`, or any `IfActive<T>` — see the
+[Interaction Pipeline](/concepts/interaction-pipeline)). Instead of mutating the widget's
+base components, each **records the individual field it touched** onto a `StatePatch`, which
+the draw pass blends over the base only while the state is active:
+
+```beef
+Button("+");
+IfHover(scope () => {
+    Fill(.(90, 90, 90, 255));   // records a Fill patch; no Background block needed
+});
+```
+
+- `Fill`, `Stroke`, `StrokeWidth` (and the text words `TextColor`, `FontSize`) record their
+  field onto the patch and early-return.
+- `Background { … }` and `Border { … }` become transparent pass-throughs — there is no pen to
+  open in patch mode; the enclosed field words do the recording.
+- `Radius` is **not an animatable patch field yet**, so it is ignored inside a state body.
+
+Wrap a recording word in [`Transition`](/api/modifiers#transition) to animate that field.

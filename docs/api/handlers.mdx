@@ -1,6 +1,6 @@
 ---
 title: Handlers
-description: Event handler words — OnClick and the ClickHandler delegate
+description: Event handler words — OnClick and OnDrag, and their delegates
 ---
 
 Event handler words attach behavior to widgets using the **get-or-create pattern** on the
@@ -51,10 +51,14 @@ class CounterSDLApp : SDLApp
 ### What happens on click
 
 1. SDL mouse-up event arrives at `SDLApp`'s event loop
-2. `PressTracker` checks: was the mouse-down and mouse-up on the same widget?
+2. `PressTracker` (keyed by `StableKey`, not a `Widget*`) checks: were mouse-down and mouse-up on the same widget?
 3. If yes, it walks the hit-test chain, finds each widget's `OnClickBehavior`, and fires its `Handler`
 4. The handler runs user code (e.g. `mCount++`)
 5. The handler calls `Invalidate()` to trigger a rebuild
+
+The press *highlight* itself doesn't go through this path — it's an interaction state
+resolved at draw (`IfPressed`), so pressing requests a repaint, not a rebuild. See the
+[Interaction Pipeline](/concepts/interaction-pipeline).
 
 ### Handler lifetime
 
@@ -84,33 +88,71 @@ Component bag. It has no `Measure`, `Draw*`, or other pipeline hooks; the input 
 iterates the Behavior bag during event dispatch. This is the standard pattern for any
 new event handler you author.
 
+## OnDrag
+
+```
+( widget DragHandler -- widget )
+```
+
+```beef
+Button("drag me");
+OnDrag(new (dx, dy) => { mX += dx; mY += dy; Invalidate(); });
+```
+
+Makes the stack-top widget draggable by attaching an `OnDragBehavior`. On press over the
+widget, `DragTracker` begins a **pointer capture** in the persistent store keyed by
+`StableKey`; while captured, every motion event routes to this handler with the incremental
+delta since the last move — even when the pointer leaves the widget's rect. Release ends the
+capture.
+
+The visual follows via a render-time offset applied in `SDLApp.DrawWidget` — no relayout, no
+rebuild — so a lightweight drag (that doesn't reflow siblings) needn't call `Invalidate()`
+at all. See the [Interaction Pipeline](/concepts/interaction-pipeline) for capture and the
+reflow seam.
+
+### DragHandler delegate
+
+```beef
+public delegate void DragHandler(float dx, float dy);
+```
+
+Receives the incremental pointer movement (`dx`, `dy`) for each motion event during the drag.
+
 ## Authoring a new behavior
 
-The pattern is the same for any event-driven capability:
+The pattern is the same for any event-driven capability (`OnClick` and `OnDrag` both follow
+it):
 
 1. Subclass `Behavior` with your delegate field
 2. Write a modifier word that get-or-creates it on the Behavior bag
-3. Register any framework hooks (like `RegisterHandler`) if needed
+3. Register the delegate with `RegisterHandler` so the framework owns and frees it
 
 ```beef
-public class OnHoverBehavior : Behavior
+public delegate void DoubleClickHandler();
+
+public class OnDoubleClickBehavior : Behavior
 {
-    public delegate void HoverHandler(bool entered);
-    public HoverHandler Handler;
+    public DoubleClickHandler Handler;
 }
 
 extension UI
 {
-    public static void OnHover(OnHoverBehavior.HoverHandler h)
+    public static void OnDoubleClick(DoubleClickHandler h)
     {
-        let w = Top("OnHover");
-        var b = w.GetBehavior<OnHoverBehavior>();
+        let w = Top("OnDoubleClick");
+        var b = w.GetBehavior<OnDoubleClickBehavior>();
         if (b == null)
         {
-            b = new:BuildAlloc OnHoverBehavior();
+            b = new:BuildAlloc OnDoubleClickBehavior();
             w.AttachBehavior(b);
         }
+        RegisterHandler(h);
         b.Handler = h;
     }
 }
 ```
+
+Note that *hover* is **not** a behavior — it's an interaction state resolved at draw
+(`IfHover`). Reach for a `Behavior` when you need to fire user code on an event; reach for an
+`IInteractionState` when you need state-dependent *styling*. See the
+[Interaction Pipeline](/concepts/interaction-pipeline).

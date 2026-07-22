@@ -9,7 +9,9 @@ lives in one of three separate type-safe bags. The bags are the architecture.
 
 ## The three bags
 
-`Widget` (in `src/Core/Widget.bf`) carries its name, a few universal fields, and three lists:
+`Widget` (in `src/Core/Widget.bf`) carries its name, a few universal fields (including
+`StableKey`, the persistent identity assigned post-build by `KeyAssign` — see the
+[Interaction Pipeline](/concepts/interaction-pipeline)), and three lists:
 
 | Bag | Base class | What goes in it | Pipeline hooks |
 |---|---|---|---|
@@ -63,7 +65,15 @@ Properties have no `Measure`, no draw hooks, no event dispatch — they're queri
 |---|---|---|
 | `TextStyleProperty` | `FontSize`, `TextColor` | `TextComponent` (Measure + DrawContent), modifier words |
 | `LayoutHint` | `CrossAlign`, `Width`, `Height` | Layout pass |
-| `PressState` | `IsActive` → queries `PressTracker` | `IfActive<T>` / `IfPressed` conditional build |
+| `PressState` | `IInteractionState` → `Store.IsPressed(key)` | `IfActive<T>` / `IfPressed` patch recording |
+| `HoverState` | `IInteractionState` → `Store.IsHovered(key)` | `IfActive<T>` / `IfHover` patch recording |
+| `InteractionStyle` | the widget's list of recorded `StatePatch` deltas | `StyleResolve` at draw time |
+
+`PressState` and `HoverState` are **interaction states**: `Property` subclasses that
+implement `IInteractionState` and report, for a `StableKey`, whether they're active by
+reading the persistent `InteractionStore`. `InteractionStyle` carries the field-level
+patches a state body records. See the [Interaction Pipeline](/concepts/interaction-pipeline)
+for how these compose at draw.
 
 ## Behavior
 
@@ -74,6 +84,7 @@ chain, finds widgets with `OnClickBehavior`, and fires the handler.
 | Behavior | What it holds | Who reads it |
 |---|---|---|
 | `OnClickBehavior` | `ClickHandler Handler` delegate | `PressTracker` on mouse-up |
+| `OnDragBehavior` | `DragHandler Handler` delegate | `DragTracker` while the widget holds pointer capture |
 
 ## Capability queries
 

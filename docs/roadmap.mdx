@@ -16,22 +16,26 @@ build on an unproven foundation.
 | **M0** — SDL window | ✅ Complete | SDL3 window opens, event loop, close on ✕. De-risked Beef+SDL3 linkage before any framework code depended on it. |
 | **M1** — Static tree renders | ✅ Complete | Flex layout pass (constraints-down/sizes-up, sum-main/max-cross, leftover→Spacer), concrete `Painter` over SDL3 renderer + TTF, text measurement + rasterization. Counter UI appears laid out in the window (not yet clickable). |
 | **M2** — Real input | ✅ Complete | SDL pointer events → hit-test rects → dispatch `OnClickBehavior` → `Invalidate` → rebuild → repaint. Clicking +/− updates the count. *Minimal GUI app goal reached.* |
-| **M3** — Interaction states | 🔲 In progress | **Done:** cross-axis alignment (`Center`, `AlignStart`, `AlignEnd`, `AlignStretch`), sizing constraints (`Width`, `Height`, `FixedSize` with `SizingConstraints` discriminated union), `PressState` + `IInteractionState` + `IfActive<T>` / `IfPressed` conditional build with press-highlight visual feedback. **Next:** hover states + **repaint-vs-rebuild split** (hover must not trigger a tree rebuild). Exit: buttons highlight on hover with no rebuild. |
-| **M4** — Persistent state: scroll | 🔲 Future | Widget-identity side table (parent path + call index + `Key`), rebuild-surviving store, clipping, wheel events. Exit: scroll a list, click a button, scroll position survives. |
+| **M3** — Interaction states | ✅ Complete | Cross-axis alignment (`Center`, `AlignStart`, `AlignEnd`, `AlignStretch`), sizing constraints (`Width`, `Height`, `FixedSize` with `SizingConstraints`), and a draw-time-resolved interaction pipeline: `IfActive<T>` / `IfPressed` / `IfHover` record field-level `StatePatch` deltas blended at draw, a persistent `InteractionStore` keyed by `StableKey`, `Transition` animation with easing curves, `OnDrag` with pointer capture, and the **repaint-vs-rebuild split** (idle blocks in `SDL_WaitEvent`, ticks at ~60fps only while animating/dragging). Exit met: buttons highlight on hover with no rebuild; ~0% idle CPU. |
+| **M4** — Persistent state: scroll | 🔲 In progress | The rebuild-surviving identity store landed early in M3 (`KeyAssign` → `StableKey` path hash + `InteractionStore`). **Remaining:** clipping, wheel events, scroll offset as persistent state. Exit: scroll a list, click a button, scroll position survives. |
 | **M5** — Text input, focus, keyboard | 🔲 Future | Focus routing, caret, key events, editing. Depends on M4 identity. Exit: type into and edit a text field. |
 
 ## Earmarked (post-M5)
 
-Memoization (only if profiled slow) · `Model<T>` observables + `Bind` · Animations ·
-Drag protocol · Image/asset pipeline · Complex-object primitives · Accessibility ·
+Memoization (only if profiled slow) · `Model<T>` observables + `Bind` ·
+Live-reflow drag / layout-affecting animation (behind the M3 drag-offset seam) ·
+Image/asset pipeline · Complex-object primitives · Accessibility ·
 **Renderer/platform abstraction + alternate backend** (extracted from concrete `Painter`
 once the concatenative model is proven).
+
+Delivered ahead of schedule in M3: basic **animation** (`Transition` + easing) and a
+**drag protocol** (`OnDrag` + pointer capture), both previously earmarked here.
 
 ## Constraint checkpoints
 
 - M1: Rects on transient widgets (freed with arena) ✅
 - M3: Cross-axis alignment + sizing constraints ✅
-- M3: Press state with conditional build (IfPressed) ✅
-- M3: Repaint loop allocates nothing per frame
-- M4: Side-table eviction policy for vanished keys
+- M3: Interaction state resolved at draw via `StatePatch` (IfPressed / IfHover) ✅
+- M3: Repaint loop reuses the tree; idle blocks at ~0% CPU ✅
+- M4: Side-table eviction policy for vanished keys (clocks self-prune once settled; hover/press flags do not yet)
 - Post-M2/M5: Profile before any memoization/observer work

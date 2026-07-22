@@ -109,34 +109,43 @@ public static void OnClick(ClickHandler h)
 This ensures a modifier works whether it's the first or Nth one on a widget; no ordering
 dependency. The pattern is the same across all three bags.
 
-## Interaction state modifiers (IfPressed)
+## Interaction state modifiers (IfPressed, IfHover)
 
-`IfPressed` is a conditional modifier — it only runs its body when the widget is being
-pressed. It's built on the generic `IfActive<T>` mechanism:
+`IfPressed` and `IfHover` are **state modifiers**. Unlike an ordinary conditional, their body
+**always runs** at build — but inside it, styling words don't mutate the base components.
+They record a field-level **style patch** that the draw pass applies only while the state is
+active:
 
 ```beef
 Button("+"); {
     TextColor(.White);
+    IfHover(scope () => {
+        Transition(150, scope () => { Fill(.(90, 90, 90, 255)); });   // fades in on hover
+    });
     IfPressed(scope () => {
-        Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+        Fill(.(120, 120, 120, 255));   // instant while pressed
     });
     OnClick(new => { mCount++; Invalidate(); });
 }
 ```
 
-How it works: `IfActive<PressState>(body)` get-or-creates a `PressState` property on the
-stack-top widget, then evaluates `PressState.IsActive` — which queries
-`PressTracker.IsPressed(buildIndex)`. When true, the body runs (typically a
-`Background { ... }` block that replaces the `Interior` with a brighter fill). When false,
-the body doesn't run and the widget renders its default appearance.
+How it works: both are `IfActive<T>` specializations (`IfActive<PressState>`,
+`IfActive<HoverState>`). `IfActive<T>` get-or-creates the state property `T` on the stack-top
+widget, then runs the body with a fresh `StatePatch` as the recording target. Styling words
+that fire inside record their field onto the patch instead of touching the base; the patch is
+tagged with its gating state and stored on the widget's `InteractionStyle`. At draw,
+`StyleResolve` asks the state `IsActiveFor(widget.StableKey)` (reading the persistent
+`InteractionStore`) and blends the active patches over the base values, field by field.
 
-This is rebuild-safe: on the first build the `PressState` property is created and attached;
-on subsequent rebuilds `GetProperty<PressState>()` finds the existing instance. The
-`IsActive` query is inline — it doesn't trigger a separate rebuild. The visual change
-happens during the normal build cycle.
+This is why press and hover no longer rebuild the tree — they call `RequestRepaint()`, and
+the changed look is resolved at draw. It's also why concurrent states **compose**: a
+hover patch that sets `Fill` and a focus patch that sets `TextColor` both apply. Wrapping a
+recorded field in `Transition(ms, …)` animates it via a clock in the store that survives
+rebuilds.
 
-`IfActive<T>` is the generic mechanism; any `Property` that implements
-`IInteractionState` can power a conditional modifier. `IfPressed` is just the first one.
+`IfActive<T>` is the generic mechanism; any `Property` that implements `IInteractionState`
+can power a state modifier. See the [Interaction Pipeline](/concepts/interaction-pipeline)
+for the full model, animation, and drag.
 
 ## Pen blocks
 

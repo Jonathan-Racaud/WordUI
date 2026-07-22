@@ -28,6 +28,7 @@ export default defineConfig({
 						{ label: 'Widget Model', slug: 'concepts/widget-model' },
 						{ label: 'Modifiers & Pens', slug: 'concepts/modifiers' },
 						{ label: 'Rebuild Model', slug: 'concepts/rebuild-model' },
+						{ label: 'Interaction Pipeline', slug: 'concepts/interaction-pipeline' },
 					],
 				},
 				{

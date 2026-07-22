@@ -59,7 +59,8 @@ TabWidth = 93.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Program.bf"
-CursorPos = 1320
+CursorPos = 1215
+VertPos = 281.25
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]

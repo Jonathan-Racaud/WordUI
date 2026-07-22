@@ -81,7 +81,7 @@ and calls `ReplaceComponent` to attach it to the widget below.
 
 | Word | Description |
 |---|---|
-| `RegisterHandler(h)` | Register a `ClickHandler` for the current build. Framework takes ownership; handlers are freed on the next rebuild. |
+| `RegisterHandler(h)` | Register an event handler (`ClickHandler`, `DragHandler`, …) for the current build. The framework holds them in one `List<Delegate>`, takes ownership, and frees them on the next rebuild. |
 
 Handlers only ever dispatch against the current tree, so this lifetime is safe.
 
@@ -92,7 +92,10 @@ Handlers only ever dispatch against the current tree, so this lifetime is safe.
 | `BeginBuild(arena, handlers)` | Initialize the stack and build arena. Called by `App.RebuildIfNeeded()`. |
 | `EndBuild()` | Validate the stack has exactly 1 root widget, pop and return it. Called by `App.RebuildIfNeeded()`. |
 | `BuildAlloc` | The `BumpAllocator` for the current build. Valid only between `BeginBuild` and `EndBuild`. Use `new:BuildAlloc` for all allocations during `Build()`. |
-| `CurrentBuildPosition()` | Returns the current widget build index. Used by interaction state properties (`PressState`) to query trackers. |
+
+After `EndBuild()`, `App` runs `KeyAssign.Run(root)` to assign each widget a `StableKey` —
+the identity that persistent interaction state keys off of. This retires the old positional
+build ordinal; there is no longer a "current build position" to query.
 
 ## Failure
 

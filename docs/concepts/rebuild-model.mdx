@@ -25,10 +25,10 @@ abstract class App
 ## Lifecycle
 
 ```
-User action (click, timer)
+App data changes (click handler, timer)
     │
     ▼
-Handler calls Invalidate()
+Handler calls Invalidate()  (mDirty = true)
     │
     ▼
 Event loop calls RebuildIfNeeded()
@@ -43,11 +43,20 @@ New BumpAllocator created
 Build() runs → word sequence executes → new tree
     │
     ▼
+KeyAssign walks the tree → assigns each widget a StableKey
+    │
+    ▼
 Layout pass (constraints-down, sizes-up, flex)
     │
     ▼
-Paint pass (DrawBackground → DrawContent → DrawOverlay)
+Paint pass (DrawBackground → DrawContent → DrawOverlay),
+resolving interaction patches at draw
 ```
+
+Visual-only changes (hover, press, an animation tick) take a **cheaper path**: the handler
+calls `RequestRepaint()` (`mNeedsRepaint = true`) instead of `Invalidate()`, and the loop
+re-runs only the paint pass on the existing tree — no arena teardown, no rebuild, no layout.
+See [Interaction Pipeline](/concepts/interaction-pipeline) for that path.
 
 ## BumpAllocator
 
@@ -111,15 +120,27 @@ If whole-tree rebuild ever proves too slow (to be measured, not assumed), the gr
 Both are earmarked for far-future optimization; the current model is the right default for
 an experimental framework — no point optimizing what hasn't been measured slow.
 
-## Interaction state without repaint (M3)
+## Rebuild vs. repaint
 
-Press-state highlighting is handled inline during `Build()` via `IfPressed` — the
-`PressTracker` state is queried during the normal build cycle, and the highlight body runs
-or doesn't run based on the current press state. No separate repaint pass is needed for
-press feedback; it's just another build triggered by the mouse-down event.
+There are two invalidation paths, and interaction takes the cheaper one:
 
-The remaining M3 work is **hover states**, which will require a genuine
-**repaint-vs-rebuild split**: hover must not trigger a full tree rebuild because it
-happens on every mouse-move. M3 will introduce a repaint path (re-run the paint pass on
-the existing tree) for interaction-only visual changes. This is the first point where the
-existing tree survives across frames.
+| Path | Trigger | Flag | What runs |
+|---|---|---|---|
+| **Rebuild** | App data changed | `Invalidate()` → `mDirty` | Free arena → `Build()` → `KeyAssign` → layout → paint |
+| **Repaint** | Visual-only change (hover, press, animation) | `RequestRepaint()` → `mNeedsRepaint` | Paint pass only, on the existing tree |
+
+The split exists because interaction happens far too often to rebuild for. Hover fires on
+every mouse-move; an animation ticks ~60 times a second. Tearing down and rebuilding the
+tree for each would be wasteful and — before the split — caused missed clicks via the
+dangling `Widget*` a freed arena left behind.
+
+Instead, press/hover/drag and animation all call `RequestRepaint()`. Their state lives in
+the persistent [`InteractionStore`](/concepts/interaction-pipeline) (keyed by `StableKey`, not
+a `Widget*`), and the visual change is resolved at draw by blending recorded style patches
+over the base values. The existing tree survives across these frames; only a real app-data
+change (`Invalidate()`) triggers a rebuild.
+
+This is also why the event loop can idle at ~0% CPU: with nothing dirty and nothing
+animating it **blocks in `SDL_WaitEvent`**, waking only for real input. While an animation or
+drag is live it ticks on a ~16ms frame clock instead. See the
+[Interaction Pipeline](/concepts/interaction-pipeline) for the full model.

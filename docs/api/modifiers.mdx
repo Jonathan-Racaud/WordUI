@@ -1,6 +1,6 @@
 ---
 title: Modifiers
-description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing, IfPressed
+description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing, IfPressed, IfHover, Transition
 ---
 
 Modifier words act on the widget at the stack top. They follow **Rule B**: always write the
@@ -78,8 +78,10 @@ Sets the font size in pixels.
 Label(scope:: $"Item {i}"); Key(i);
 ```
 
-Sets a stable identity on the stack-top widget. `Key` is designed into the `Widget` struct
-but is currently a placeholder; the persistent-state side table that uses it arrives in M4.
+Sets a stable identity hint on the stack-top widget. `KeyAssign` feeds this hint (when `>= 0`,
+e.g. a list-item index) into each widget's `StableKey` path hash as its discriminator instead
+of the sibling ordinal, so dynamic children keep a stable identity for the persistent
+[`InteractionStore`](/concepts/interaction-pipeline) across rebuilds.
 
 ## Cross-axis alignment
 
@@ -127,6 +129,10 @@ Button("OK"); FixedSize(120, 40);
 
 ## Interaction state
 
+Both words below always run their body at build; the enclosed styling words record a
+field-level style patch that the draw pass applies only while the state is active. See the
+[Interaction Pipeline](/concepts/interaction-pipeline) for the full model.
+
 ### IfPressed
 
 ```
@@ -137,16 +143,49 @@ Button("OK"); FixedSize(120, 40);
 Button("+"); {
     TextColor(.White);
     IfPressed(scope () => {
-        Background(scope () => { Fill(.(120, 120, 120, 255)); Radius(4); });
+        Fill(.(120, 120, 120, 255));   // applied while pressed
     });
     OnClick(new => { mCount++; Invalidate(); });
 }
 ```
 
-Runs the body only while the stack-top widget is being pressed. Built on `IfActive<PressState>`,
-which get-or-creates a `PressState` property (Property bag) and evaluates
-`PressTracker.IsPressed(buildIndex)`. The body typically contains a `Background { ... }`
-block that replaces the `Interior` with a highlight color.
+Records the enclosed styling as a patch that applies while the stack-top widget is pressed.
+Built on `IfActive<PressState>`, which get-or-creates a `PressState` property (Property bag);
+at draw, `StyleResolve` checks `Store.IsPressed(widget.StableKey)` and blends the patch over
+the base. Press requests a repaint, not a rebuild.
 
-Rebuild-safe: `PressState` is created on the first build and found via `GetProperty` on
-subsequent rebuilds. The `IsActive` query is inline — it doesn't trigger a separate rebuild.
+### IfHover
+
+```
+( widget delegate -- widget )
+```
+
+```beef
+Button("+"); {
+    IfHover(scope () => {
+        Transition(150, scope () => { Fill(.(90, 90, 90, 255)); });   // fades in on hover
+    });
+}
+```
+
+Same mechanism as `IfPressed`, gated on hover (`IfActive<HoverState>` →
+`Store.IsHovered(key)`). Hover is hit-tested on pointer motion and resolved at draw, so
+entering/leaving repaints without flicker or a per-motion rebuild.
+
+### Transition
+
+```
+( int delegate -- ) · ( int Easing delegate -- )
+```
+
+```beef
+IfHover(scope () => {
+    Transition(200, .Spring, scope () => { Fill(.Blue); });
+});
+```
+
+Marks the fields recorded inside its body as animated over `ms` milliseconds (default curve
+`.EaseInOut`; overload takes `Linear` / `EaseInOut` / `Spring`). The animation runs off a
+clock in the persistent store, so it survives a rebuild and keeps the frame loop ticking
+until it settles. Outside a state body it is a transparent pass-through. Only animatable
+fields interpolate — `Radius` currently applies instantly even inside a `Transition`.

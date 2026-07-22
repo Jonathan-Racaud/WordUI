@@ -19,8 +19,11 @@ BeefBuild
 ```
 
 The counter demo opens an SDL3 window with a centered title label, `+`/`-` buttons in a
-horizontal stack, and a dynamic count display. The `+` button highlights on press via
-`IfPressed`. Clicking the buttons updates the count via `Invalidate()` → rebuild → repaint.
+horizontal stack, and a dynamic count display. The `+` button animates its background on
+hover (`IfHover` + `Transition`) and highlights instantly on press (`IfPressed`) — both
+resolved at draw with no rebuild. Clicking a button mutates the count and calls
+`Invalidate()`, which rebuilds the tree; the window otherwise idles at ~0% CPU, waking only
+for input or a live animation.
 
 ## Diagnostics flags
 
@@ -74,13 +77,13 @@ The key pattern, intentionally simple:
 
 ```
 src/
-├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, PressTracker, InputEvent, Rect, Size, Color, Primitives
+├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, InputEvent, Rect, Size, Color, Primitives
+│                  #   + interaction pipeline: KeyAssign (StableKey), InteractionStore, Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker
 ├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout
-├── Properties/    # Pure data: TextStyleProperty, LayoutHint (+ CrossAlignment, SizingConstraints), PressState (+ IInteractionState)
-├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler)
+├── Properties/    # Pure data: TextStyleProperty, LayoutHint (+ CrossAlignment, SizingConstraints), PressState/HoverState (+ IInteractionState), StatePatch/InteractionStyle
+├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler), OnDragBehavior (+ DragHandler)
 ├── Widgets/       # Word definitions: Label, Button, Stack, Spacer
 ├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment, Sizing, Styling (pen blocks)
-├── Handlers/      # Event words: OnClick (get-or-create OnClickBehavior)
 ├── Diagnostics/   # Diagnostics words: PrintStack, DumpTree
 └── Program.bf     # Entry point, counter demo, negative-test harnesses
 ```
