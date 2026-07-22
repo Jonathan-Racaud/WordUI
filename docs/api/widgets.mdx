@@ -121,6 +121,37 @@ VStack(scope () => {
 }); Padding(8);
 ```
 
+### Scrollable
+
+```
+( mark child* widget -- widget )
+```
+
+| Word | Description |
+|---|---|
+| `_Scrollable()` | Push a named marker |
+| `Scrollable_()` | Create `"Scrollable"` widget with `StackLayout(Axis.Vertical)` **and** a `ScrollView` marker, collect children back to marker |
+| `Scrollable(delegate void())` | Sugar: `_Scrollable(); body(); Scrollable_()` |
+
+A `Scrollable` is a stack that carries a `ScrollView` component, so the mouse wheel scrolls
+its children and the scroll offset survives rebuilds (it lives in the persistent
+[`InteractionStore`](/concepts/interaction-pipeline) keyed by `StableKey`). It is vertical by
+default; set the axis with `Horizontal()`/`Vertical()`.
+
+It does **not** clip on its own — clipping is a separate composable capability. Give it a
+bounded main-axis size and add `Clip()` so its content overflows into a scroll viewport
+instead of the container growing to fit:
+
+```beef
+Scrollable(scope () => {
+    for (let t in mTodos)
+        TodoRow(t.id, t.text, new () => { Remove(t.id); });
+}); Height(.Fixed(240)); Spacing(6); Clip();
+```
+
+See [`Clip`, `Vertical`, `Horizontal`](/api/modifiers#clipping-and-scroll-direction) and the
+[Scroll & clipping](/concepts/interaction-pipeline) note.
+
 ### Paired primitives for cross-function factoring
 
 When a single delegate block isn't enough (e.g. children generated across multiple functions),

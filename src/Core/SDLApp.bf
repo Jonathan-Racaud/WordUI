@@ -92,15 +92,37 @@ public abstract class SDLApp : App
 		for (let c in w.Components)
 			c.DrawContent(mPainter, w, bounds);
 
-		// 3. Children — recurse (inherit the drag offset)
+		// 3. Children — recurse, optionally clipped to this widget's box and
+		// translated by its persistent scroll offset (same render-time offset
+		// mechanism as drag, folded into a private childOx/childOy).
+		var childOx = ox, childOy = oy;
+
+		bool clip = w.GetComponent<ClipRegion>() != null;
+		if (clip)
+			mPainter.PushClip(bounds);
+
+		if (w.GetComponent<ScrollView>() != null)
+		{
+			let off = Store.GetScroll(w.StableKey);
+			let stack = w.GetComponent<StackLayout>();
+			if (stack == null || stack.Axis == .Vertical)
+				childOy -= off;
+			else
+				childOx -= off;
+		}
+
 		let children = w.GetComponent<Children>();
 		if (children != null)
 		{
 			for (let child in children.Items)
-				DrawWidget(child, ox, oy);
+				DrawWidget(child, childOx, childOy);
 		}
 
-		// 4. Overlay — strokes on top of content and children (Boundary)
+		if (clip)
+			mPainter.PopClip();
+
+		// 4. Overlay — strokes on top of content and children (Boundary),
+		// unclipped so a container's own border draws around its full box.
 		for (let c in w.Components)
 			c.DrawOverlay(mPainter, w, bounds);
 	}
@@ -178,6 +200,13 @@ public abstract class SDLApp : App
 			Invalidate();
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION:
 			HandleMotion(event.motion.x, event.motion.y);
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
+			InputEvent wheel = .() {
+				Type = .MouseWheel,
+				X = event.wheel.mouse_x, Y = event.wheel.mouse_y,
+				WheelX = event.wheel.x, WheelY = event.wheel.y
+			};
+			ScrollTracker.HandleWheel(Root, wheel);
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
 			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
 			{

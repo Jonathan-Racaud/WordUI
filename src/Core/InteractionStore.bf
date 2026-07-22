@@ -32,6 +32,7 @@ class InteractionStore
 
 	Dictionary<int, bool> mHover = new .() ~ delete _;
 	Dictionary<int, bool> mPress = new .() ~ delete _;
+	Dictionary<int, float> mScroll = new .() ~ delete _;
 	Dictionary<ClockKey, Clock> mClocks = new .() ~ delete _;
 
 	// Pointer capture / drag. mDragKey == 0 means no active drag.
@@ -48,6 +49,36 @@ class InteractionStore
 
 	public void SetPress(int key, bool v) => mPress[key] = v;
 	public bool IsPressed(int key) => mPress.GetValueOrDefault(key);
+
+	// ---- Scroll offset (persistent per-widget float, keyed by StableKey) ----
+
+	public float GetScroll(int key) => mScroll.GetValueOrDefault(key);
+	public void SetScroll(int key, float v) => mScroll[key] = v;
+
+	// ---- Eviction (the M4 constraint checkpoint) ----
+
+	// Drop retained state for widgets that no longer exist in the freshly built
+	// tree. Called after KeyAssign with the set of keys assigned this build, so a
+	// churning list (todo items added/removed) doesn't leak store entries.
+	// Clocks self-prune in Tick, so only the plain per-key maps need sweeping.
+	public void Retain(HashSet<int> live)
+	{
+		Prune(mHover, live);
+		Prune(mPress, live);
+		Prune(mScroll, live);
+	}
+
+	static void Prune<TVal>(Dictionary<int, TVal> map, HashSet<int> live)
+	{
+		List<int> dead = scope .();
+		for (let pair in map)
+		{
+			if (!live.Contains(pair.key))
+				dead.Add(pair.key);
+		}
+		for (let k in dead)
+			map.Remove(k);
+	}
 
 	// ---- Drag / capture ----
 

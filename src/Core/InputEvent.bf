@@ -10,9 +10,11 @@ public struct InputEvent
 	{
 		MouseDown,
 		MouseUp,
-		MouseMotion
+		MouseMotion,
+		MouseWheel
 	}
 
 	public Kind Type;
-	public float X, Y;
+	public float X, Y;          // pointer position in window coords
+	public float WheelX, WheelY; // scroll amounts (MouseWheel only)
 }

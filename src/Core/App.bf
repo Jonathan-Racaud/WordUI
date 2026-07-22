@@ -55,7 +55,13 @@ public abstract class App
 		UI.BeginBuild(mArena, mHandlers);
 		Build();
 		mRoot = UI.EndBuild();
-		KeyAssign.Run(mRoot);   // stable identity for the persistent store
+
+		// Assign stable identity, collecting the live key set, then evict retained
+		// store entries for keys that vanished this build (M4 eviction checkpoint).
+		HashSet<int> live = scope .();
+		KeyAssign.Run(mRoot, live);
+		Store.Retain(live);
+
 		mDirty = false;
 		return true;
 	}

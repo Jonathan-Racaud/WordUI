@@ -1,6 +1,6 @@
 ---
 title: Modifiers
-description: Modifier words — Padding, Spacing, TextColor, FontSize, Key, Alignment, Sizing, IfPressed, IfHover, Transition
+description: Modifier words — Padding, Spacing, Clip, Vertical/Horizontal, TextColor, FontSize, Key, Alignment, Sizing, IfPressed, IfHover, Transition
 ---
 
 Modifier words act on the widget at the stack top. They follow **Rule B**: always write the
@@ -39,6 +39,43 @@ HStack(scope () => {
 Sets the gap between children in a stack container. Requires the widget to have a
 `StackLayout` component (Component bag) — applying `Spacing` to a `Label` errors with:
 `"Label has no StackLayout — Spacing does not apply to it"`.
+
+## Clipping and scroll direction
+
+These compose a scroll viewport from smaller words, on top of a
+[`Scrollable`](/api/widgets#scrollable) (or any container).
+
+### Clip
+
+```
+( widget -- widget )
+```
+
+```beef
+Scrollable(scope () => { ... }); Height(.Fixed(240)); Clip();
+```
+
+Attaches a `ClipRegion` component (Component bag) to the stack-top container, restricting its
+children's drawing to its own bounds. Clipping is independent of scroll — `Clip()` works on
+any container — so a scroll viewport that hides overflow is `Scrollable(...)` + a bounded
+`Height` + `Clip()`. The clip is applied around the children in `SDLApp.DrawWidget` via the
+`Painter`'s clip stack (which intersects nested clips), so a container's own border still
+strokes its full box.
+
+### Vertical / Horizontal
+
+```
+( widget -- widget )
+```
+
+```beef
+Scrollable(scope () => { ... }); Horizontal();
+```
+
+Set the `Axis` on the stack-top container's `StackLayout` component. `Scrollable` defaults to
+vertical; `Horizontal()` flips it (and the wheel then scrolls along the horizontal axis).
+Requires a `StackLayout` — applying either to a `Label` errors with
+`"Label has no StackLayout — Horizontal does not apply to it"`.
 
 ## Text modifiers
 

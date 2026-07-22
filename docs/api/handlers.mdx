@@ -1,6 +1,6 @@
 ---
 title: Handlers
-description: Event handler words — OnClick and OnDrag, and their delegates
+description: Event handler words — OnClick, OnDrag, and OnScroll, and their delegates
 ---
 
 Event handler words attach behavior to widgets using the **get-or-create pattern** on the
@@ -117,6 +117,32 @@ public delegate void DragHandler(float dx, float dy);
 ```
 
 Receives the incremental pointer movement (`dx`, `dy`) for each motion event during the drag.
+
+## OnScroll
+
+```
+( widget ScrollHandler -- widget )
+```
+
+```beef
+Scrollable(scope () => { ... });
+OnScroll(new (offset) => { mScrolledTo = offset; });
+```
+
+Attaches an `OnScrollBehavior` to the stack-top widget. When a wheel event scrolls the widget,
+`ScrollTracker` adjusts its persistent offset (clamped to the content extent) and then invokes
+this handler with the new offset. Unlike `OnDrag`, a wheel is a discrete impulse with no
+capture — so `OnScroll` is a plain event consumer, not a gesture. The scroll itself (offset
+storage + clipped translation) happens whether or not a handler is attached; `OnScroll` is for
+*reacting* to it. See [Scrollable](/api/widgets#scrollable).
+
+### ScrollHandler delegate
+
+```beef
+public delegate void ScrollHandler(float offset);
+```
+
+Receives the widget's new clamped scroll offset in pixels.
 
 ## Authoring a new behavior
 

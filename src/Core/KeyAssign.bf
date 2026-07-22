@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 
 namespace WordUI;
 
@@ -14,22 +15,26 @@ namespace WordUI;
 // with no collisions between a small user int and a computed path.
 static class KeyAssign
 {
-	public static void Run(Widget root)
+	// When `liveKeys` is provided, every assigned StableKey is added to it, so the
+	// caller can evict store entries for keys absent from this build.
+	public static void Run(Widget root, HashSet<int> liveKeys = null)
 	{
 		if (root != null)
-			Assign(root, 1, 0);
+			Assign(root, 1, 0, liveKeys);
 	}
 
-	static void Assign(Widget w, int parentKey, int siblingIndex)
+	static void Assign(Widget w, int parentKey, int siblingIndex, HashSet<int> live)
 	{
 		int disc = w.Key >= 0 ? w.Key : siblingIndex;
 		w.StableKey = Mix(Mix(parentKey, HashName(w.Name)), disc);
+		if (live != null)
+			live.Add(w.StableKey);
 
 		let children = w.GetComponent<Children>();
 		if (children == null)
 			return;
 		for (int i = 0; i < children.Items.Count; i++)
-			Assign(children.Items[i], w.StableKey, i);
+			Assign(children.Items[i], w.StableKey, i, live);
 	}
 
 	// FNV-1a over the name bytes; stable and allocation-free.
