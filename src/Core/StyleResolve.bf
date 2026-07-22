@@ -58,8 +58,10 @@ static class StyleResolve
 		let active = rec.State.IsActiveFor(w.StableKey);
 		if (!anim)
 			return active ? 1f : 0f;
-		return App.Instance.Store.Blend(
-			w.StableKey, rec.State.StateId, active, rec.Patch.DurationMs, rec.Patch.Curve);
+		let node = App.Instance.FindNode(w.StableKey);
+		return node != null
+			? node.Blend(rec.State.StateId, active, rec.Patch.DurationMs, rec.Patch.Curve)
+			: 0f;
 	}
 
 	static bool HasColor(StatePatch p, ColorField field, out Color value, out bool anim)

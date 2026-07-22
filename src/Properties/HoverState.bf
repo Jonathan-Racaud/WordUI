@@ -5,10 +5,15 @@ namespace WordUI;
 // Active while the pointer is over the widget at ownerKey. Hover is resolved at
 // draw (no rebuild), so entering/leaving repaints without the flicker or CPU
 // spike a per-motion rebuild would cause.
+// Queries the retained Node for SlotHover (slot 1) via App.FindNode.
 public class HoverState : Property, IInteractionState
 {
 	public int StateId => 2;
-	public bool IsActiveFor(int ownerKey) => App.Instance.Store.IsHovered(ownerKey);
+	public bool IsActiveFor(int ownerKey)
+	{
+		let node = App.Instance.FindNode(ownerKey);
+		return node != null && node.GetBool(HoverTracker.SlotHover);
+	}
 
 	public override void Describe(String buf)
 	{

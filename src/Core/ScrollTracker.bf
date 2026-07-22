@@ -4,11 +4,15 @@ namespace WordUI;
 
 // Wheel dispatch. Unlike drag there is no capture: each wheel event is a discrete
 // impulse. HandleWheel finds the scrollable under the pointer, adjusts its
-// persistent offset in the InteractionStore (clamped to the content extent), and
+// persistent offset in the retained Node (clamped to the content extent), and
 // requests a repaint — no rebuild, mirroring the drag/press cheap path. The
 // offset is applied at draw time in SDLApp.DrawWidget.
+//
+// Slot 3: scroll offset float — stored on the retained Node.
 static class ScrollTracker
 {
+	public const int SlotScroll = 3;
+
 	// Pixels of scroll per wheel notch.
 	const float StepPx = 30f;
 
@@ -40,17 +44,21 @@ static class ScrollTracker
 		}
 		float maxOffset = Math.Max(0, (contentEnd - innerOrigin) - viewportMain);
 
-		let store = App.Instance.Store;
+		let app = App.Instance;
+		let node = app.FindNode(hit.StableKey);
+		let current = node != null ? node.GetFloat(SlotScroll) : 0f;
+
 		// SDL wheel y is positive away from the user; scrolling away reveals
 		// earlier content, i.e. a smaller offset.
-		float next = Math.Clamp(store.GetScroll(hit.StableKey) - event.WheelY * StepPx, 0, maxOffset);
-		store.SetScroll(hit.StableKey, next);
+		float next = Math.Clamp(current - event.WheelY * StepPx, 0, maxOffset);
+		if (node != null)
+			node.SetFloat(SlotScroll, next);
 
 		let b = hit.GetBehavior<OnScrollBehavior>();
 		if (b != null && b.Handler != null)
 			b.Handler(next);
 
-		App.Instance.RequestRepaint();
+		app.RequestRepaint();
 	}
 
 	// Deepest widget carrying a ScrollView whose rect contains the point. Because

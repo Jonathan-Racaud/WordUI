@@ -6,6 +6,13 @@ namespace WordUI;
 // Rebuild-on-invalidate driver: `Build()` re-runs only after `Invalidate()`,
 // producing a fresh widget tree in a bump arena; the previous tree (widgets,
 // components, string copies) is freed wholesale by deleting the arena.
+//
+// The retained Node tree lives on the heap and survives rebuilds. After each
+// build, ReconcileTree() matches Widget descriptions (by StableKey) against
+// existing Nodes: matched Nodes are reused and their state (hover, press,
+// scroll, animations) persists; new Nodes are created; orphaned Nodes are
+// disposed.
+//
 // Non-core conveniences (e.g. DumpTree) live in Diagnostics/ as extensions
 // of this class.
 public abstract class App
@@ -23,11 +30,29 @@ public abstract class App
 	bool mDirty = true;
 	bool mNeedsRepaint = false;
 
-	// Interaction/animation/drag state that must outlive the build arena, so a
-	// hover fade at t=0.1s keeps running across a rebuild. Keyed by StableKey.
-	public InteractionStore Store = new .() ~ delete _;
+	// ---- Retained runtime: the Node tree ----
+
+	// Root of the retained node tree. Nodes are heap-allocated and survive
+	// rebuilds; they carry identity, parent/child relationships, generic state
+	// storage, and per-node animation clocks.
+	Node mRootNode;
+
+	// O(1) StableKey → Node lookup so trackers and draw code can access
+	// persistent state without a tree walk.
+	Dictionary<int, Node> mNodeIndex = new .() ~ delete _;
+
+	// ---- Drag / pointer capture (per-pointer-session, not per-widget) ----
+
+	int mDragKey = 0;
+	float mDragDX, mDragDY;
+	float mDragLastX, mDragLastY;
+
+	// ---- Public accessors ----
 
 	protected Widget Root => mRoot;
+
+	public bool DragActive => mDragKey != 0;
+	public int DragKey => mDragKey;
 
 	protected abstract void Build();
 
@@ -40,6 +65,72 @@ public abstract class App
 
 	public bool NeedsRepaint => mNeedsRepaint;
 	public void ClearRepaint() { mNeedsRepaint = false; }
+
+	// ---- Node lookup ----
+
+	// Returns the retained Node for a given StableKey, or null if none exists.
+	// O(1) via the index. Used by trackers and draw code to read/write
+	// persistent per-widget state.
+	public Node FindNode(int stableKey)
+	{
+		Node node;
+		mNodeIndex.TryGetValue(stableKey, out node);
+		return node;
+	}
+
+	// ---- Animation ticks ----
+
+	// Advances all animation clocks in the retained Node tree by the wall-clock
+	// delta since the last tick. Called once per frame from the event loop.
+	public void TickAll(int nowMs)
+	{
+		if (mRootNode != null)
+			mRootNode.Tick(nowMs);
+	}
+
+	// True while any animation clock in the retained tree is mid-transition,
+	// or a drag is active — drives the event loop to use a frame-clock timeout
+	// instead of blocking.
+	public bool NeedsTick
+	{
+		get
+		{
+			if (mDragKey != 0)
+				return true;
+			return mRootNode != null && mRootNode.NeedsTick;
+		}
+	}
+
+	// ---- Drag state ----
+
+	public void BeginDrag(int key, float x, float y)
+	{
+		mDragKey = key;
+		mDragDX = 0; mDragDY = 0;
+		mDragLastX = x; mDragLastY = y;
+	}
+
+	// Returns the incremental delta since the last motion.
+	public (float dx, float dy) UpdateDrag(float x, float y)
+	{
+		let dx = x - mDragLastX;
+		let dy = y - mDragLastY;
+		mDragDX += dx; mDragDY += dy;
+		mDragLastX = x; mDragLastY = y;
+		return (dx, dy);
+	}
+
+	public void EndDrag()
+	{
+		mDragKey = 0;
+		mDragDX = 0; mDragDY = 0;
+	}
+
+	// Accumulated offset for the widget currently being dragged (else zero).
+	public (float x, float y) DragOffset(int key) =>
+		(key == mDragKey) ? (mDragDX, mDragDY) : (0f, 0f);
+
+	// ---- Build lifecycle ----
 
 	// Returns true if a rebuild happened.
 	public bool RebuildIfNeeded()
@@ -56,14 +147,79 @@ public abstract class App
 		Build();
 		mRoot = UI.EndBuild();
 
-		// Assign stable identity, collecting the live key set, then evict retained
-		// store entries for keys that vanished this build (M4 eviction checkpoint).
+		// Assign stable identity, collecting the live key set.
 		HashSet<int> live = scope .();
 		KeyAssign.Run(mRoot, live);
-		Store.Retain(live);
+
+		// Reconcile the retained Node tree against the new Widget tree:
+		// reuse matched Nodes, create new ones, dispose orphans.
+		ReconcileTree(mRoot, live);
 
 		mDirty = false;
 		return true;
+	}
+
+	// ---- Reconciliation ----
+
+	// Matches the freshly-built Widget tree against the existing retained Node
+	// tree by StableKey. Matched Nodes are reused (their persistent state
+	// survives); new Nodes are created and indexed; orphaned Nodes (in the index
+	// but not in the live set) are disposed and removed.
+	void ReconcileTree(Widget root, HashSet<int> live)
+	{
+		// Walk the Widget tree depth-first, building or reusing Nodes.
+		Node newRoot = ReconcileWidget(root, null, live);
+
+		// Dispose orphans: any Node in the index that wasn't seen this build.
+		List<int> orphanKeys = scope .();
+		for (let pair in mNodeIndex)
+		{
+			if (!live.Contains(pair.key))
+				orphanKeys.Add(pair.key);
+		}
+		for (let key in orphanKeys)
+		{
+			let node = mNodeIndex[key];
+			mNodeIndex.Remove(key);
+			node.Dispose();
+			delete node;
+		}
+
+		mRootNode = newRoot;
+	}
+
+	// Recursively reconciles one Widget to a retained Node. Returns the
+	// (possibly new, possibly reused) Node for this subtree.
+	Node ReconcileWidget(Widget w, Node parent, HashSet<int> live)
+	{
+		if (w == null)
+			return null;
+
+		Node node;
+		if (!mNodeIndex.TryGetValue(w.StableKey, out node))
+		{
+			// First time seeing this key: create a fresh Node.
+			node = new Node(w.StableKey);
+			mNodeIndex[w.StableKey] = node;
+		}
+
+		// Update parent/child links (the Widget tree structure may have changed).
+		node.Parent = parent;
+		node.Children.Clear();
+
+		// Recurse into children.
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				let childNode = ReconcileWidget(child, node, live);
+				if (childNode != null)
+					node.Children.Add(childNode);
+			}
+		}
+
+		return node;
 	}
 
 	void ClearHandlers()

@@ -4,9 +4,9 @@ namespace WordUI;
 
 // Interaction states are Properties that report, for a given widget identity,
 // whether they are currently active. The draw-time resolver queries this to
-// decide whether a recorded StatePatch applies. Implementations read from a
-// tracker in the persistent InteractionStore (keyed by StableKey), so state
-// survives rebuilds and never touches a freed Widget*.
+// decide whether a recorded StatePatch applies. Implementations read from
+// the retained Node tree (keyed by StableKey), so state survives rebuilds
+// and never touches a freed Widget*.
 //
 // StateId must be a stable, unique small int per state type: it keys the
 // animation clock so a transition keeps its progress across rebuilds. User
@@ -18,10 +18,15 @@ public interface IInteractionState
 }
 
 // Active while the widget at ownerKey is being pressed.
+// Queries the retained Node for SlotPress (slot 2) via App.FindNode.
 public class PressState : Property, IInteractionState
 {
 	public int StateId => 1;
-	public bool IsActiveFor(int ownerKey) => App.Instance.Store.IsPressed(ownerKey);
+	public bool IsActiveFor(int ownerKey)
+	{
+		let node = App.Instance.FindNode(ownerKey);
+		return node != null && node.GetBool(PressTracker.SlotPress);
+	}
 
 	public override void Describe(String buf)
 	{

@@ -2,21 +2,25 @@ using System;
 
 namespace WordUI;
 
-// Press/click dispatch, keyed by StableKey in the persistent InteractionStore.
+// Press/click dispatch, keyed by StableKey in the retained Node tree.
 // Storing a key (not a Widget*) is what fixes the missed/delayed clicks: the
 // key stays valid across the arena teardown a rebuild performs, so a down in
 // one frame and an up several frames (and rebuilds) later still match.
 //
-// Press no longer triggers a rebuild — it sets store state and requests a
+// Press no longer triggers a rebuild — it sets Node state and requests a
 // repaint, so IfPressed feedback resolves at draw with no tree teardown.
+//
+// Slot 2: press bool — set on the retained Node for the pressed widget.
 static class PressTracker
 {
+	public const int SlotPress = 2;
+
 	static int sPressedKey = 0;   // 0 = nothing pressed
 	static bool sPressedClickable;
 
 	public static bool HandleEvent(Widget root, InputEvent event)
 	{
-		let store = App.Instance.Store;
+		let app = App.Instance;
 
 		if (event.Type == .MouseDown)
 		{
@@ -28,8 +32,9 @@ static class PressTracker
 			}
 			sPressedKey = hit.StableKey;
 			sPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
-			store.SetPress(sPressedKey, true);
-			App.Instance.RequestRepaint();
+			let node = app.FindNode(sPressedKey);
+			node?.SetBool(SlotPress, true);
+			app.RequestRepaint();
 			return false;
 		}
 
@@ -38,8 +43,9 @@ static class PressTracker
 			if (sPressedKey == 0)
 				return false;
 
-			store.SetPress(sPressedKey, false);
-			App.Instance.RequestRepaint();
+			let pressedNode = app.FindNode(sPressedKey);
+			pressedNode?.SetBool(SlotPress, false);
+			app.RequestRepaint();
 
 			let released = HitTest.At(root, event.X, event.Y);
 			bool fired = false;

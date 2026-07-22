@@ -75,10 +75,12 @@ public abstract class SDLApp : App
 		if (w == null)
 			return;
 
+		let app = App.Instance;
+
 		var ox, oy;
-		if (Store.DragActive && w.StableKey == Store.DragKey)
+		if (app.DragActive && w.StableKey == app.DragKey)
 		{
-			let (dx, dy) = Store.DragOffset(w.StableKey);
+			let (dx, dy) = app.DragOffset(w.StableKey);
 			ox += dx; oy += dy;
 		}
 
@@ -103,7 +105,8 @@ public abstract class SDLApp : App
 
 		if (w.GetComponent<ScrollView>() != null)
 		{
-			let off = Store.GetScroll(w.StableKey);
+			let node = app.FindNode(w.StableKey);
+			let off = node != null ? node.GetFloat(ScrollTracker.SlotScroll) : 0f;
 			let stack = w.GetComponent<StackLayout>();
 			if (stack == null || stack.Axis == .Vertical)
 				childOy -= off;
@@ -146,7 +149,7 @@ public abstract class SDLApp : App
 		while (!quit)
 		{
 			// Block when idle; tick at ~60fps while animating/dragging.
-			if (Store.NeedsTick)
+			if (App.Instance.NeedsTick)
 			{
 				if (SDL_WaitEventTimeout(&event, 16))
 					HandleEvent(event, ref quit);
@@ -173,14 +176,14 @@ public abstract class SDLApp : App
 				HandleMotion(motionX, motionY);
 
 			// Advance animation clocks against wall-clock time.
-			Store.Tick((int)SDL_GetTicks());
+			App.Instance.TickAll((int)SDL_GetTicks());
 
 			if (RebuildIfNeeded())
 			{
 				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
 				Render();
 			}
-			else if (NeedsRepaint || Store.NeedsTick)
+			else if (NeedsRepaint || App.Instance.NeedsTick)
 			{
 				Render();
 				ClearRepaint();
@@ -219,7 +222,7 @@ public abstract class SDLApp : App
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
 			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
 			{
-				if (Store.DragActive)
+				if (App.Instance.DragActive)
 					DragTracker.HandleUp();
 				InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
 				PressTracker.HandleEvent(Root, input);
@@ -231,7 +234,7 @@ public abstract class SDLApp : App
 	// A drag capture takes precedence over hover updates while it is active.
 	void HandleMotion(float x, float y)
 	{
-		if (Store.DragActive)
+		if (App.Instance.DragActive)
 			DragTracker.HandleMotion(Root, x, y);
 		else
 			HoverTracker.HandleMotion(Root, x, y);
