@@ -46,8 +46,10 @@ Each `Node` carries:
   Framework reserves slots 1–99; user capabilities pick ≥ 100.
 - **Animation clocks** — per `(Node, stateId)`, an eased progress `p ∈ [0,1]` that
   advances toward `1` while the state is active and toward `0` while inactive, so
-  interrupting or reversing a transition mid-flight stays smooth. Clocks self-prune
-  when settled at 0.
+  interrupting or reversing a transition mid-flight stays smooth. Clocks and state
+  slots self-prune after each reconciliation: any slot or clock key not referenced
+  by the current widget's `IInteractionState` properties (or the framework-reserved
+  set `StateSlots.FrameworkIds`) is removed, preventing unbounded growth.
 
 This is the evolution of the earlier flat `InteractionStore` (deleted in the architectural
 refactor): instead of separate per-type dictionaries in a monolithic store, state now lives
@@ -56,17 +58,19 @@ hierarchy.
 
 ### Trackers write to Node state
 
-Each tracker defines its own slot constant and writes directly to the retained `Node`:
+Each tracker writes to the retained `Node` through typed `StateSlot<T>` accessors
+(defined in `src/Core/StateSlot.bf`, collected in `StateSlots`):
 
-- **HoverTracker** — slot `1` (`HoverTracker.SlotHover`): sets a bool on the hovered
-  widget's Node via `node.SetBool(SlotHover, true/false)`.
-- **PressTracker** — slot `2` (`PressTracker.SlotPress`): sets a bool on the pressed
+- **HoverTracker** — `StateSlots.Hover` (slot 1, `StateSlot<bool>`): sets a bool on the hovered
+  widget's Node via `StateSlots.Hover.Set(node, true/false)`.
+- **PressTracker** — `StateSlots.Press` (slot 2, `StateSlot<bool>`): sets a bool on the pressed
   widget's Node.
-- **ScrollTracker** — slot `3` (`ScrollTracker.SlotScroll`): stores a float scroll offset
+- **ScrollTracker** — `StateSlots.Scroll` (slot 3, `StateSlot<float>`): stores a float scroll offset
   on the scrolled widget's Node.
 
 State properties (`PressState`, `HoverState`) query the Node at draw time via
-`App.Instance.FindNode(ownerKey)?.GetBool(slot)` instead of a monolithic store.
+`StateSlots.Hover.Get(node)` and `StateSlots.Press.Get(node)` — typed accessors that
+handle null nodes and return `default(T)` for unset slots.
 Animation clocks live per-Node via `node.Blend(stateId, active, durationMs, curve)` —
 called by `StyleResolve` at draw — and a single `App.TickAll(nowMs)` advances every clock
 in the tree.
@@ -182,8 +186,12 @@ Any `Property` that implements `IInteractionState` can power a conditional state
 ```beef
 public class FocusState : Property, IInteractionState
 {
-    public int StateId => 3;   // stable, unique small int (framework reserves 1..99)
-    public bool IsActiveFor(int ownerKey) => App.Instance.FindNode(ownerKey)?.GetBool(slot) == true;
+    public int StateId => 100; // stable, unique small int (framework reserves 1..99; user picks ≥ 100)
+    public bool IsActiveFor(int ownerKey)
+    {
+        let node = App.Instance.FindNode(ownerKey);
+        return node != null && MySlots.Focused.Get(node);
+    }
     public override void Describe(String buf) => buf.Append(" focus");
 }
 
@@ -193,6 +201,9 @@ extension UI
 }
 ```
 
-`StateId` must be stable and unique per state type — it keys the animation clock so a
-transition keeps its progress across rebuilds. `IsActiveFor` reads whatever tracker in the
-`App.Instance.FindNode` owns that state's boolean.
+`StateId` must be stable and globally unique per state type — it keys the animation clock
+so a transition keeps its progress across rebuilds. The framework reserves slots 1–99
+(`StateSlots.FrameworkIds`); user states **must** pick ≥ 100. If two different
+`IInteractionState` types share the same `StateId`, the build fails with a named error
+(collision detection in `RecordPatch`). `IsActiveFor` reads from the retained `Node`
+through a typed `StateSlot<T>` accessor (shown as `MySlots.Focused` above).

@@ -42,4 +42,4 @@ BeefBuild
 ./build/Debug_Linux64/WordUI/WordUI
 ```
 
-Status: early experiment — word vocabulary, modifiers, styling, alignment + sizing constraints, SDL3 rendering, hit-test, click dispatch, press/hover interaction states with animated transitions, drag with pointer capture, and scrollable containers all working. Text input and focus are upcoming.
+Status: early experiment — word vocabulary, modifiers, styling, alignment + sizing constraints, SDL3 rendering, hit-test, click dispatch, press/hover interaction states with animated transitions, drag with pointer capture, and scrollable containers all working. A retained `Node` tree provides rebuild-surviving generic state storage (`StateSlot<T>` accessors over `Dictionary<int, Variant>` per-node) with slot pruning and clock management. Text input and focus are upcoming.

@@ -16,7 +16,8 @@ README.md                  # Quick-start, build instructions, status
 plans/                     # Per-session planning docs and brainstorming notes
 src/
 ├── Core/                  # Foundation: Widget (sealed, 3 bags), App, UI (stack + ops), Component/Property/Behavior base classes, Color, Children, StackItem, Primitives, Rect, Size, Layout, Painter, HitTest, InputEvent, SDLApp
-│                          #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker, ScrollTracker
+│                          #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), StateSlot (typed per-node state accessors), StateSlots (framework-reserved slots), Interaction (IfActive/Transition), StyleResolve, Easing, ITracker, HoverTracker, DragTracker, PressTracker, ScrollTracker
+│                          #   + forward-looking: ITickable (design artifact for Phase 5 tick dispatch)
 ├── Components/            # Pipeline participants (Component bag): TextComponent, Interior, Boundary, StackLayout, Children
 ├── Properties/            # Pure data (Property bag) + their setter words: TextStyleProperty/TextColor/FontSize, LayoutHint/Center/Align/Width/Height, PressState/HoverState (IInteractionState), StatePatch/InteractionStyle
 ├── Behaviors/             # Event handlers (Behavior bag): OnClickBehavior/OnClick, OnDragBehavior/OnDrag

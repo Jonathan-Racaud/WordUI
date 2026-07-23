@@ -65,8 +65,8 @@ Properties have no `Measure`, no draw hooks, no event dispatch — they're queri
 |---|---|---|
 | `TextStyleProperty` | `FontSize`, `TextColor` | `TextComponent` (Measure + DrawContent), modifier words |
 | `LayoutHint` | `CrossAlign`, `Width`, `Height` | Layout pass |
-| `PressState` | `IInteractionState` → `FindNode(key).GetBool(SlotPress)` | `IfActive<T>` / `IfPressed` patch recording |
-| `HoverState` | `IInteractionState` → `FindNode(key).GetBool(SlotHover)` | `IfActive<T>` / `IfHover` patch recording |
+| `PressState` | `IInteractionState` → reads `StateSlots.Press` from the retained `Node` | `IfActive<T>` / `IfPressed` patch recording |
+| `HoverState` | `IInteractionState` → reads `StateSlots.Hover` from the retained `Node` | `IfActive<T>` / `IfHover` patch recording |
 | `InteractionStyle` | the widget's list of recorded `StatePatch` deltas | `StyleResolve` at draw time |
 
 `PressState` and `HoverState` are **interaction states**: `Property` subclasses that

@@ -37,5 +37,5 @@ Delivered ahead of schedule in M3: basic **animation** (`Transition` + easing) a
 - M3: Cross-axis alignment + sizing constraints ✅
 - M3: Interaction state resolved at draw via `StatePatch` (IfPressed / IfHover) ✅
 - M3: Repaint loop reuses the tree; idle blocks at ~0% CPU ✅
-- M4: Orphan eviction via `ReconcileTree()` — matched Nodes are reused, absent keys are disposed; clocks self-prune once settled ✅
+- M4: Orphan eviction via `ReconcileTree()` — matched Nodes are reused, absent keys are disposed; stale state slots and clocks are pruned from reused Nodes whose `IInteractionState` references have changed; clocks self-prune once settled ✅
 - Post-M2/M5: Profile before any memoization/observer work
