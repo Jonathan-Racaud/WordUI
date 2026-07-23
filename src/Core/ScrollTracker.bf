@@ -3,24 +3,25 @@ using System;
 namespace WordUI;
 
 // Wheel dispatch. Unlike drag there is no capture: each wheel event is a discrete
-// impulse. HandleWheel finds the scrollable under the pointer, adjusts its
+// impulse. HandleEvent finds the scrollable under the pointer, adjusts its
 // persistent offset in the retained Node (clamped to the content extent), and
 // requests a repaint — no rebuild, mirroring the drag/press cheap path. The
 // offset is applied at draw time in SDLApp.DrawWidget.
 //
-// Slot 3: scroll offset float — stored on the retained Node.
-static class ScrollTracker
+// State slot: StateSlots.Scroll (3) — float stored on the retained Node.
+class ScrollTracker : ITracker
 {
-	public const int SlotScroll = 3;
-
 	// Pixels of scroll per wheel notch.
 	const float StepPx = 30f;
 
-	public static void HandleWheel(Widget root, InputEvent event)
+	public bool HandleEvent(Widget root, InputEvent event)
 	{
+		if (event.Type != .MouseWheel)
+			return false;
+
 		let hit = FindScrollableAt(root, event.X, event.Y);
 		if (hit == null)
-			return;
+			return false;
 
 		let stack = hit.GetComponent<StackLayout>();
 		bool vertical = stack == null || stack.Axis == .Vertical;
@@ -46,19 +47,25 @@ static class ScrollTracker
 
 		let app = App.Instance;
 		let node = app.FindNode(hit.StableKey);
-		let current = node != null ? node.GetFloat(SlotScroll) : 0f;
+		let current = node != null ? StateSlots.Scroll.Get(node) : 0f;
 
 		// SDL wheel y is positive away from the user; scrolling away reveals
 		// earlier content, i.e. a smaller offset.
 		float next = Math.Clamp(current - event.WheelY * StepPx, 0, maxOffset);
 		if (node != null)
-			node.SetFloat(SlotScroll, next);
+			StateSlots.Scroll.Set(node, next);
 
 		let b = hit.GetBehavior<OnScrollBehavior>();
 		if (b != null && b.Handler != null)
 			b.Handler(next);
 
 		app.RequestRepaint();
+		return false;
+	}
+
+	public bool HandleMotion(Widget root, float x, float y)
+	{
+		return false;
 	}
 
 	// Deepest widget carrying a ScrollView whose rect contains the point. Because

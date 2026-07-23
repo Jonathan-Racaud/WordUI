@@ -8,9 +8,11 @@ namespace WordUI;
 // the retained Node tree (keyed by StableKey), so state survives rebuilds
 // and never touches a freed Widget*.
 //
-// StateId must be a stable, unique small int per state type: it keys the
-// animation clock so a transition keeps its progress across rebuilds. User
-// states pick their own id (framework reserves 1..99).
+// StateId must be a stable, globally unique small int per state type: it keys
+// the animation clock so a transition keeps its progress across rebuilds.
+// Framework reserves 1..99; user states MUST pick >= 100. Two different
+// IInteractionState types using the same StateId will fail at build with a
+// named error (collision detected in RecordPatch).
 public interface IInteractionState
 {
 	int StateId { get; }
@@ -18,14 +20,14 @@ public interface IInteractionState
 }
 
 // Active while the widget at ownerKey is being pressed.
-// Queries the retained Node for SlotPress (slot 2) via App.FindNode.
+// Queries the retained Node for StateSlots.Press (slot 2) via App.FindNode.
 public class PressState : Property, IInteractionState
 {
 	public int StateId => 1;
 	public bool IsActiveFor(int ownerKey)
 	{
 		let node = App.Instance.FindNode(ownerKey);
-		return node != null && node.GetBool(PressTracker.SlotPress);
+		return node != null && StateSlots.Press.Get(node);
 	}
 
 	public override void Describe(String buf)

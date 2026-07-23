@@ -47,6 +47,20 @@ public abstract class App
 	float mDragDX, mDragDY;
 	float mDragLastX, mDragLastY;
 
+	// ---- Event trackers (registered by the backend) ----
+
+	// Trackers are called in registration order for each input event.
+	// A tracker returning true stops iteration (consumes the event).
+	List<ITracker> mTrackers = new .() ~ DeleteContainerAndItems!(_);
+
+	public void RegisterTracker(ITracker t)
+	{
+		mTrackers.Add(t);
+	}
+
+	// Iterated by the backend's event loop. Registration order = dispatch order.
+	public List<ITracker> Trackers => mTrackers;
+
 	// ---- Public accessors ----
 
 	protected Widget Root => mRoot;
@@ -206,6 +220,21 @@ public abstract class App
 		// Update parent/child links (the Widget tree structure may have changed).
 		node.Parent = parent;
 		node.Children.Clear();
+
+		// Prune stale state from the reused Node: collect the set of live slot
+		// ids from IInteractionState properties on the current widget plus the
+		// framework-reserved ids (trackers write those regardless of properties).
+		HashSet<int> liveSlots = scope .();
+		for (let id in StateSlots.FrameworkIds)
+			liveSlots.Add(id);
+		for (let p in w.Properties)
+		{
+			let s = p as IInteractionState;
+			if (s != null)
+				liveSlots.Add(s.StateId);
+		}
+		node.PruneState(liveSlots);
+		node.PruneClocks(liveSlots);
 
 		// Recurse into children.
 		let children = w.GetComponent<Children>();

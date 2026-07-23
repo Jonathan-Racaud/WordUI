@@ -10,15 +10,13 @@ namespace WordUI;
 // Press no longer triggers a rebuild — it sets Node state and requests a
 // repaint, so IfPressed feedback resolves at draw with no tree teardown.
 //
-// Slot 2: press bool — set on the retained Node for the pressed widget.
-static class PressTracker
+// State slot: StateSlots.Press (2) — bool written to the retained Node.
+class PressTracker : ITracker
 {
-	public const int SlotPress = 2;
+	int mPressedKey = 0;   // 0 = nothing pressed
+	bool mPressedClickable;
 
-	static int sPressedKey = 0;   // 0 = nothing pressed
-	static bool sPressedClickable;
-
-	public static bool HandleEvent(Widget root, InputEvent event)
+	public bool HandleEvent(Widget root, InputEvent event)
 	{
 		let app = App.Instance;
 
@@ -27,29 +25,29 @@ static class PressTracker
 			let hit = HitTest.At(root, event.X, event.Y);
 			if (hit == null)
 			{
-				sPressedKey = 0;
+				mPressedKey = 0;
 				return false;
 			}
-			sPressedKey = hit.StableKey;
-			sPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
-			let node = app.FindNode(sPressedKey);
-			node?.SetBool(SlotPress, true);
+			mPressedKey = hit.StableKey;
+			mPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
+			let node = app.FindNode(mPressedKey);
+			StateSlots.Press.Set(node, true);
 			app.RequestRepaint();
 			return false;
 		}
 
 		if (event.Type == .MouseUp)
 		{
-			if (sPressedKey == 0)
+			if (mPressedKey == 0)
 				return false;
 
-			let pressedNode = app.FindNode(sPressedKey);
-			pressedNode?.SetBool(SlotPress, false);
+			let pressedNode = app.FindNode(mPressedKey);
+			StateSlots.Press.Set(pressedNode, false);
 			app.RequestRepaint();
 
 			let released = HitTest.At(root, event.X, event.Y);
 			bool fired = false;
-			if (sPressedClickable && released != null && released.StableKey == sPressedKey)
+			if (mPressedClickable && released != null && released.StableKey == mPressedKey)
 			{
 				let clickable = released.GetBehavior<OnClickBehavior>();
 				if (clickable != null && clickable.Handler != null)
@@ -58,10 +56,15 @@ static class PressTracker
 					fired = true;
 				}
 			}
-			sPressedKey = 0;
+			mPressedKey = 0;
 			return fired;
 		}
 
+		return false;
+	}
+
+	public bool HandleMotion(Widget root, float x, float y)
+	{
 		return false;
 	}
 }

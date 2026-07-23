@@ -28,6 +28,10 @@ public class Node
 	Dictionary<int, Variant> mState = new .() ~ delete _;
 
 	// ---- Animation clocks ----
+	// [Phase5Extract] Clock, mClocks, Blend(), Tick(), and NeedsTick are
+	// temporary. Phase 5 replaces them with generic ITickable dispatch on
+	// capabilities stored in mState. See src/Core/ITickable.bf for the
+	// target interface.
 
 	struct Clock
 	{
@@ -103,6 +107,7 @@ public class Node
 	}
 
 	// ---- Animation clocks ----
+	// [Phase5Extract] Blend/Tick/NeedsTick will be replaced by ITickable.
 
 	// Ensure a clock exists for `stateId`, update its target/params, and return
 	// the current eased blend factor in [0,1] (0 = base, 1 = fully at target).
@@ -130,6 +135,9 @@ public class Node
 		if (dtMs <= 0)
 			return;
 
+		// Collect updated clocks and settled keys outside the enumeration so
+		// we never mutate mClocks while iterating it.
+		List<(int key, Clock clock)> updates = scope .();
 		List<int> settled = scope .();
 		for (var pair in mClocks)
 		{
@@ -139,10 +147,12 @@ public class Node
 				c.P = Math.Min(1f, c.P + step);
 			else
 				c.P = Math.Max(0f, c.P - step);
-			mClocks[pair.key] = c;
+			updates.Add((pair.key, c));
 			if (!c.Target && c.P <= 0f)
 				settled.Add(pair.key);
 		}
+		for (let (key, clock) in updates)
+			mClocks[key] = clock;
 		for (let k in settled)
 			mClocks.Remove(k);
 
@@ -171,6 +181,38 @@ public class Node
 			}
 			return false;
 		}
+	}
+
+	// ---- State pruning ----
+
+	// Remove every mState key not in `liveSlots`. Called after reconciliation
+	// for Nodes that were reused: a widget at the same StableKey may have
+	// dropped a capability (e.g. HoverState removed), and its stale slot data
+	// should be cleaned so mState doesn't grow unboundedly.
+	public void PruneState(HashSet<int> liveSlots)
+	{
+		List<int> dead = scope .();
+		for (let pair in mState)
+		{
+			if (!liveSlots.Contains(pair.key))
+				dead.Add(pair.key);
+		}
+		for (let k in dead)
+			mState.Remove(k);
+	}
+
+	// Same for animation clocks: remove clocks whose stateId is no longer
+	// referenced by any IInteractionState on the current widget.
+	public void PruneClocks(HashSet<int> liveStateIds)
+	{
+		List<int> dead = scope .();
+		for (let pair in mClocks)
+		{
+			if (!liveStateIds.Contains(pair.key))
+				dead.Add(pair.key);
+		}
+		for (let k in dead)
+			mClocks.Remove(k);
 	}
 
 	// ---- Lifecycle ----

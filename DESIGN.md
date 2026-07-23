@@ -242,6 +242,22 @@ and per-state animation clocks. After each build, `ReconcileTree()` matches the 
 tree against the existing Node tree by `StableKey`; matched Nodes are reused (state persists),
 new ones are created, and orphans are disposed. This is the side table grown into a tree.
 
+**Per-node state slots and pruning.** Each `Node` carries `Dictionary<int, Variant> mState`
+for generic capability-owned state (hover, press, scroll, user-defined). Slots are typed via
+`StateSlot<T>` accessors; the framework reserves slots 1–99 (`StateSlots.FrameworkIds`) for
+built-in trackers, and user capabilities pick ≥100. After each reconciliation, stale slots
+are pruned: any slot key not referenced by the current widget's `IInteractionState` properties
+(or the framework-reserved set) is removed, preventing unbounded growth.
+
+**Time-based state (Phase 5 direction).** Currently `Node` carries hardcoded animation clocks
+(`Clock` struct, `mClocks`, `Blend()`/`Tick()`/`NeedsTick`). Phase 5 will replace this with a
+generic `ITickable` interface (`src/Core/ITickable.bf` — design artifact): capabilities
+implement `ITickable`, store their own per-frame data in `mState`, and `Node.Tick(dtMs)`
+iterates registered tickables. This lets users author custom time-based behaviours (blinking
+cursor, physics, inertial scroll, custom animation curves) as capabilities without framework
+modification. The `Easing` enum will become an interface or delegate so users can supply
+custom interpolation curves.
+
 ## Deferred
 
 Roadmap set in `plans/20260718_Roadmap/00_roadmap.md`. Milestone spine (each ends in a

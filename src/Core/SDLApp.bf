@@ -37,6 +37,16 @@ public abstract class SDLApp : App
 		);
 		mPainter = new Painter(mRenderer, mDefaultFont);
 		sDefaultFont = mDefaultFont;
+
+		// Register event trackers in dispatch-priority order.
+		// DragTracker first: its HandleMotion returns true during a drag,
+		// short-circuiting HoverTracker to prevent flicker. Its HandleEvent
+		// returns true on MouseDown when a drag starts, so PressTracker
+		// (next in order) is skipped.
+		RegisterTracker(new DragTracker());
+		RegisterTracker(new PressTracker());
+		RegisterTracker(new ScrollTracker());
+		RegisterTracker(new HoverTracker());
 	}
 
 	public static TTF_Font* sDefaultFont;
@@ -106,7 +116,7 @@ public abstract class SDLApp : App
 		if (w.GetComponent<ScrollView>() != null)
 		{
 			let node = app.FindNode(w.StableKey);
-			let off = node != null ? node.GetFloat(ScrollTracker.SlotScroll) : 0f;
+			let off = node != null ? StateSlots.Scroll.Get(node) : 0f;
 			let stack = w.GetComponent<StackLayout>();
 			if (stack == null || stack.Axis == .Vertical)
 				childOy -= off;
@@ -204,40 +214,38 @@ public abstract class SDLApp : App
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION:
 			HandleMotion(event.motion.x, event.motion.y);
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
-			InputEvent wheel = .() {
+			DispatchEvent(.() {
 				Type = .MouseWheel,
 				X = event.wheel.mouse_x, Y = event.wheel.mouse_y,
 				WheelX = event.wheel.x, WheelY = event.wheel.y
-			};
-			ScrollTracker.HandleWheel(Root, wheel);
+			});
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
 			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
-			{
-				if (!DragTracker.HandleDown(Root, event.button.x, event.button.y))
-				{
-					InputEvent input = .() { Type = .MouseDown, X = event.button.x, Y = event.button.y };
-					PressTracker.HandleEvent(Root, input);
-				}
-			}
+				DispatchEvent(.() { Type = .MouseDown, X = event.button.x, Y = event.button.y });
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
 			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
-			{
-				if (App.Instance.DragActive)
-					DragTracker.HandleUp();
-				InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
-				PressTracker.HandleEvent(Root, input);
-			}
+				DispatchEvent(.() { Type = .MouseUp, X = event.button.x, Y = event.button.y });
 		default:
 		}
 	}
 
-	// A drag capture takes precedence over hover updates while it is active.
+	// Dispatch an event through registered trackers in priority order.
+	// A tracker returning true stops iteration (consumes the event).
+	void DispatchEvent(InputEvent input)
+	{
+		for (let t in App.Instance.Trackers)
+			if (t.HandleEvent(Root, input))
+				return;
+	}
+
+	// Dispatch pointer motion through registered trackers. DragTracker
+	// returns true while a drag is active, short-circuiting HoverTracker
+	// to prevent flicker during a drag operation.
 	void HandleMotion(float x, float y)
 	{
-		if (App.Instance.DragActive)
-			DragTracker.HandleMotion(Root, x, y);
-		else
-			HoverTracker.HandleMotion(Root, x, y);
+		for (let t in App.Instance.Trackers)
+			if (t.HandleMotion(Root, x, y))
+				return;
 	}
 
 	private void Render()

@@ -654,3 +654,34 @@ They should not need to know:
 * there are render objects
 
 Those mechanisms exist to preserve the concatenative model at scale, not replace it.
+
+---
+
+# Phase 2.1 — Review findings & remediation (2026-07-22)
+
+Architectural review of Phase 2 (generic state storage) identified four classes of issue.
+The fixes below were applied; the remainder is deferred to planned phases.
+
+## Fixed (this phase)
+
+| # | Finding | Fix |
+|---|---|---|
+| 4a | Stale state slots accumulate in reused Nodes (memory leak) | `Node.PruneState/PruneClocks` + `StateSlots.FrameworkIds` + live-slot collection in `App.ReconcileWidget` |
+| 4b | Clock key collision risk (two IInteractionState types sharing a StateId) | Runtime collision check in `Interaction.RecordPatch` — fails with named error |
+| 4c | Dictionary mutation during enumeration in `Node.Tick()` | Collect-then-apply pattern via `List<(int, Clock)>` |
+| 4d | `StateSlot<T>.Get` no null guard | `if (node == null) return default;` |
+
+## Design artifacts added
+
+- `src/Core/ITickable.bf` — target interface for Phase 5 tick dispatch
+- `Node.bf` — `[Phase5Extract]` tags on `Clock`, `Blend()`, `Tick()`, `NeedsTick`
+- `DESIGN.md` — per-node state slots/pruning section + time-based state direction
+
+## Deferred to planned phases
+
+| Issue | Phase | Rationale |
+|---|---|---|
+| Animation clocks in Node (issue 1) | Phase 5 | Scheduler + tick subscriptions replace hardcoded clocks with `ITickable` |
+| `App.Instance` / `Node.Blend()` public (issue 3) | Phase 5/6 | `Blend()` disappears with clock extraction; `App.Instance` narrows as interaction features migrate to capabilities |
+| Reconcile-time state validity hooks (issue 4e) | Phase 3 | State lifetime management: creation/reuse/cleanup/disposal callbacks |
+| `mNodeIndex` unbounded growth under key churn (issue 4f) | Phase 3 | State lifetime management covers index cleanup for dead keys |

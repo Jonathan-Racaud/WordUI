@@ -111,6 +111,24 @@ extension UI
 			style.Records = new:BuildAlloc List<PatchRecord>();
 			w.AttachProperty(style);
 		}
+
+		// Guard against StateId collision: two different IInteractionState types
+		// using the same StateId would silently share an animation clock,
+		// producing wrong visual output. Detect and fail with a clear message
+		// so the author knows to pick a unique id.
+		for (let rec in style.Records)
+		{
+			if (rec.State.StateId == state.StateId && rec.State.GetType() != state.GetType())
+			{
+				let msg = scope String();
+				msg.AppendF("StateId {} collision on {}: {} and {} both use the same id",
+					state.StateId, w.Name,
+					rec.State.GetType().GetName(.. scope .()),
+					state.GetType().GetName(.. scope .()));
+				UI.Fail("IfActive", msg);
+			}
+		}
+
 		style.Records.Add(.() { State = state, Patch = patch });
 	}
 }

@@ -8,36 +8,40 @@ namespace WordUI;
 // entering and leaving a widget cannot flicker and cannot spike CPU with
 // per-motion rebuilds.
 //
-// Slot 1: hover bool — set on the retained Node for the hovered widget.
-static class HoverTracker
+// State slot: StateSlots.Hover (1) — bool written to the retained Node.
+class HoverTracker : ITracker
 {
-	public const int SlotHover = 1;
+	int mHoveredKey = 0;
 
-	static int sHoveredKey = 0;
-
-	public static void HandleMotion(Widget root, float x, float y)
+	public bool HandleMotion(Widget root, float x, float y)
 	{
 		let app = App.Instance;
 		let hit = HitTest.At(root, x, y);
 		let key = hit != null ? hit.StableKey : 0;
-		if (key == sHoveredKey)
-			return;
+		if (key == mHoveredKey)
+			return false;
 
 		// Clear previous hover.
-		if (sHoveredKey != 0)
+		if (mHoveredKey != 0)
 		{
-			let prev = app.FindNode(sHoveredKey);
-			prev?.SetBool(SlotHover, false);
+			let prev = app.FindNode(mHoveredKey);
+			StateSlots.Hover.Set(prev, false);
 		}
 
 		// Set new hover.
 		if (key != 0)
 		{
 			let node = app.FindNode(key);
-			node?.SetBool(SlotHover, true);
+			StateSlots.Hover.Set(node, true);
 		}
 
-		sHoveredKey = key;
+		mHoveredKey = key;
 		app.RequestRepaint();
+		return false;
+	}
+
+	public bool HandleEvent(Widget root, InputEvent event)
+	{
+		return false;
 	}
 }
