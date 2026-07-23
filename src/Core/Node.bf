@@ -14,8 +14,11 @@ namespace WordUI;
 // pick >= 100). The storage is a single Dictionary<int, Variant> — any type fits,
 // small value types (bool, int, float) are stored inline with zero allocation.
 //
-// Animation clocks are stored separately because they have internal structure
-// (progress, target, duration, curve) and their own lifecycle (self-pruning).
+// Tick dispatch is generic: capabilities that need per-frame time updates implement
+// ITickable and register themselves via RegisterTickable/UnregisterTickable.
+// Node.Tick(dtMs) iterates all registered tickables and recurses into children.
+// The scheduler (App) computes dtMs once per frame and passes it down — Node itself
+// has no concept of wall-clock time or animation.
 //
 // Lifecycle tracking (mIsNew, mInitializedSlots) lets capabilities react to
 // node creation, reuse, state cleanup, and disposal via the StateSlotRegistry.
@@ -32,25 +35,18 @@ public class Node
 	// allocation; boxing only happens for large/value types that don't fit.
 	Dictionary<int, Variant> mState = new .() ~ delete _;
 
-	// ---- Animation clocks ----
-	// [Phase5Extract] Clock, mClocks, Blend(), Tick(), and NeedsTick are
-	// temporary. Phase 5 replaces them with generic ITickable dispatch on
-	// capabilities stored in mState. See src/Core/ITickable.bf for the
-	// target interface.
+	// ---- Tick dispatch ----
+	// Capabilities that need per-frame time updates implement ITickable and
+	// register here. Node dispatches Tick(dtMs) to every registered tickable
+	// and recurses into children — it has no idea what any tickable does.
+	// Tickables own themselves: they are heap-allocated by their capability and
+	// delete themselves (or are deleted by the capability's lifecycle hooks).
+	// Node only holds references; Dispose() snapshots and deletes them all.
+	List<ITickable> mTickables = new .() ~ delete _;
 
-	struct Clock
-	{
-		public float P;          // current eased-input progress, [0,1]
-		public bool Target;      // true = animate toward 1, false = toward 0
-		public int DurationMs;
-		public Easing Curve;
-	}
-
-	// Clocks are keyed by StateId (the stable int from IInteractionState).
-	// They self-prune: clocks that settle at P=0 with Target=false are removed.
-	Dictionary<int, Clock> mClocks = new .() ~ delete _;
-
-	int mLastTickMs = -1;
+	// Read-only access for capabilities that need to find their tickable by
+	// type (e.g. AnimationState.Get scans for an existing AnimationState).
+	public List<ITickable> Tickables => mTickables;
 
 	// ---- Lifecycle tracking ----
 
@@ -202,79 +198,54 @@ public class Node
 			child.ClearPaintDirty();
 	}
 
-	// ---- Animation clocks ----
-	// [Phase5Extract] Blend/Tick/NeedsTick will be replaced by ITickable.
+	// ---- Tick dispatch ----
 
-	// Ensure a clock exists for `stateId`, update its target/params, and return
-	// the current eased blend factor in [0,1] (0 = base, 1 = fully at target).
-	// Called by the draw-time style resolver for each animated state.
-	public float Blend(int stateId, bool active, int durationMs, Easing curve)
+	// Register a capability that needs per-frame Tick() calls. Called by the
+	// capability when it is created for this node (typically during OnCreate
+	// lifecycle or lazy first-use initialisation).
+	public void RegisterTickable(ITickable t)
 	{
-		Clock c;
-		if (!mClocks.TryGetValue(stateId, out c))
-			c = .() { P = 0f, Target = active, DurationMs = durationMs, Curve = curve };
-		c.Target = active;
-		c.DurationMs = durationMs;
-		c.Curve = curve;
-		mClocks[stateId] = c;
-		return c.Curve.Apply(c.P);
+		mTickables.Add(t);
 	}
 
-	// Advance all clocks by the wall-clock delta since the last tick. Prunes
-	// clocks that have settled at 0 (fully inactive).
-	public void Tick(int nowMs)
+	// Remove a previously registered tickable. Called by the capability's
+	// destructor or during cleanup/pruning.
+	public void UnregisterTickable(ITickable t)
 	{
-		if (mLastTickMs < 0)
-			mLastTickMs = nowMs;
-		let dtMs = nowMs - mLastTickMs;
-		mLastTickMs = nowMs;
+		mTickables.Remove(t);
+	}
+
+	// Advance every registered tickable by dtMs, then recurse into children.
+	// Collects a snapshot first so tickables can safely unregister themselves
+	// during Tick() without mutating the list under iteration.
+	public void Tick(int dtMs)
+	{
 		if (dtMs <= 0)
 			return;
 
-		// Collect updated clocks and settled keys outside the enumeration so
-		// we never mutate mClocks while iterating it.
-		List<(int key, Clock clock)> updates = scope .();
-		List<int> settled = scope .();
-		for (var pair in mClocks)
-		{
-			var c = pair.value;
-			let step = c.DurationMs > 0 ? (float)dtMs / c.DurationMs : 1f;
-			if (c.Target)
-				c.P = Math.Min(1f, c.P + step);
-			else
-				c.P = Math.Max(0f, c.P - step);
-			updates.Add((pair.key, c));
-			if (!c.Target && c.P <= 0f)
-				settled.Add(pair.key);
-		}
-		for (let (key, clock) in updates)
-			mClocks[key] = clock;
-		for (let k in settled)
-			mClocks.Remove(k);
+		List<ITickable> snapshot = scope .();
+		for (let t in mTickables)
+			snapshot.Add(t);
+		for (let t in snapshot)
+			t.Tick(dtMs);
 
-		// Recurse into children so a single root Tick() call advances the whole tree.
 		for (let child in Children)
-			child.Tick(nowMs);
+			child.Tick(dtMs);
 	}
 
-	// True while any clock in this subtree is mid-transition.
-	public bool NeedsTick
+	// True while any registered tickable in this subtree still needs updates.
+	// Drives the event loop: when false (and no drag is active), the loop can
+	// block in SDL_WaitEvent instead of spinning a frame clock.
+	public bool HasActiveTicks
 	{
 		get
 		{
-			for (let pair in mClocks)
-			{
-				let c = pair.value;
-				if (c.Target && c.P < 1f)
+			for (let t in mTickables)
+				if (t.NeedsTick)
 					return true;
-				if (!c.Target && c.P > 0f)
-					return true;
-			}
 			for (let child in Children)
-			{
-				if (child.NeedsTick)
+				if (child.HasActiveTicks)
 					return true;
-			}
 			return false;
 		}
 	}
@@ -303,20 +274,6 @@ public class Node
 				lc.OnCleanup(this, k);
 			mState.Remove(k);
 		}
-	}
-
-	// Same for animation clocks: remove clocks whose stateId is no longer
-	// referenced by any IInteractionState on the current widget.
-	public void PruneClocks(HashSet<int> liveStateIds)
-	{
-		List<int> dead = scope .();
-		for (let pair in mClocks)
-		{
-			if (!liveStateIds.Contains(pair.key))
-				dead.Add(pair.key);
-		}
-		for (let k in dead)
-			mClocks.Remove(k);
 	}
 
 	// ---- Lifecycle dispatch ----
@@ -361,15 +318,25 @@ public class Node
 
 	// ---- Lifecycle ----
 
-	// Dispose this node's own resources. Fires OnDispose for every state slot
-	// still holding data so capabilities can release external resources (timers,
-	// native handles, subscriptions). Children are NOT recursively disposed
-	// here: the orphan loop in App.ReconcileTree disposes every orphaned Node
-	// individually. A reused child is reattached via ReconcileWidget, which
-	// calls Children.Clear() first to drop the old reference. Recursing here
-	// would double-free orphaned children.
+	// Dispose this node's own resources. Snapshot-deletes all registered
+	// tickables (each destructor unregisters itself), then fires OnDispose for
+	// every state slot still holding data so capabilities can release external
+	// resources (timers, native handles, subscriptions). Children are NOT
+	// recursively disposed here: the orphan loop in App.ReconcileTree disposes
+	// every orphaned Node individually. A reused child is reattached via
+	// ReconcileWidget, which calls Children.Clear() first to drop the old
+	// reference. Recursing here would double-free orphaned children.
 	public void Dispose()
 	{
+		// Delete tickables first (each destructor unregisters from mTickables).
+		// Snapshot so the list isn't mutated under iteration.
+		List<ITickable> snapshot = scope .();
+		for (let t in mTickables)
+			snapshot.Add(t);
+		for (let t in snapshot)
+			delete t;
+		mTickables.Clear();
+
 		// Fire OnDispose for every slot that still has data in this node.
 		for (let pair in mState)
 		{

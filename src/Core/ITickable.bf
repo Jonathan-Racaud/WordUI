@@ -2,19 +2,21 @@ using System;
 
 namespace WordUI;
 
-// Design artifact — forward-looking hook for Phase 5 (scheduling / frame lifecycle).
-//
 // Capabilities that need per-frame time updates implement this interface.
-// Phase 5 will replace the hardcoded Clock/Tick/Blend on Node with a generic
-// tick-dispatch loop: Node.Tick(dt) iterates ITickable capabilities stored as
-// Variant in mState (or registered directly), calling Tick(dtMs) on each.
+// Register on a Node via node.RegisterTickable(this); unregister via
+// node.UnregisterTickable(this) (typically in a destructor).
 //
-// Animation clocks will become an AnimationState : Property, ITickable
-// capability that stores its clock data in mState. Easing will become
-// user-extensible (interface or delegate instead of a closed enum).
+// Node.Tick(dtMs) iterates all registered tickables in snapshot order and
+// recurses into children. The scheduler (App) computes dtMs once per frame
+// from wall-clock time and passes it uniformly to the whole tree.
 //
-// No callers exist yet — this is a design artifact that documents the target
-// architecture. Do NOT add ITickable dispatch to Node.Tick() until Phase 5.
+// Built-in example: AnimationState manages per-StateId eased-progress clocks.
+// User example: a blinking cursor, physics simulation, or inertial scroll
+// capability implements ITickable, stores its state via Node state slots, and
+// receives Tick(dtMs) each frame without any framework modification.
+//
+// NeedsTick drives the event loop: when no ITickable in the tree returns true
+// and no drag is active, the loop blocks (zero idle CPU).
 public interface ITickable
 {
 	// True while this capability still needs frame updates. Drives the event

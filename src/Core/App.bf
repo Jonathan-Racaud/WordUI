@@ -124,24 +124,34 @@ public abstract class App
 
 	// ---- Animation ticks ----
 
-	// Advances all animation clocks in the retained Node tree by the wall-clock
+	// Wall-clock base for computing per-frame deltas. Initialised to -1 so the
+	// first TickAll computes dtMs=0 (no jump). dtMs is computed once per frame
+	// and passed uniformly to the whole retained tree.
+	int mLastTickMs = -1;
+
+	// Advances every ITickable in the retained Node tree by the wall-clock
 	// delta since the last tick. Called once per frame from the event loop.
 	public void TickAll(int nowMs)
 	{
-		if (mRootNode != null)
-			mRootNode.Tick(nowMs);
+		if (mLastTickMs < 0)
+			mLastTickMs = nowMs;
+		int dtMs = nowMs - mLastTickMs;
+		mLastTickMs = nowMs;
+		if (dtMs <= 0 || mRootNode == null)
+			return;
+		mRootNode.Tick(dtMs);
 	}
 
-	// True while any animation clock in the retained tree is mid-transition,
-	// or a drag is active — drives the event loop to use a frame-clock timeout
-	// instead of blocking.
+	// True while any ITickable in the retained tree needs frame updates, or a
+	// drag is active — drives the event loop to use a frame-clock timeout
+	// instead of blocking in SDL_WaitEvent.
 	public bool NeedsTick
 	{
 		get
 		{
 			if (mDragKey != 0)
 				return true;
-			return mRootNode != null && mRootNode.NeedsTick;
+			return mRootNode != null && mRootNode.HasActiveTicks;
 		}
 	}
 
@@ -271,7 +281,6 @@ public abstract class App
 		// PruneState for every slot being removed, so the capability can read
 		// its data one last time.
 		node.PruneState(liveSlots);
-		node.PruneClocks(liveSlots);
 
 		// Fire lifecycle callbacks (OnCreate / OnReuse) top-down, before children
 		// are reconciled, so a parent capability can initialise before its subtree.

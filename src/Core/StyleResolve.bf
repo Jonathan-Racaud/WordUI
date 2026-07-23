@@ -52,15 +52,17 @@ static class StyleResolve
 
 	// Blend strength for one record: 1/0 instantly for non-animated fields,
 	// or the eased clock value for animated ones (which also advances/keeps the
-	// loop alive while settling).
+	// loop alive while settling). Animation clocks live in the retained
+	// AnimationState tickable on each Node, not in Node itself.
 	static float Factor(Widget w, PatchRecord rec, bool anim)
 	{
 		let active = rec.State.IsActiveFor(w.StableKey);
 		if (!anim)
 			return active ? 1f : 0f;
 		let node = App.Instance.FindNode(w.StableKey);
-		return node != null
-			? node.Blend(rec.State.StateId, active, rec.Patch.DurationMs, rec.Patch.Curve)
+		let clocks = AnimationState.Get(node);
+		return clocks != null
+			? clocks.Blend(rec.State.StateId, active, rec.Patch.DurationMs, rec.Patch.Curve)
 			: 0f;
 	}
 
