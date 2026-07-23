@@ -193,6 +193,10 @@ public abstract class SDLApp : App
 				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
 				Render();
 			}
+			else if (LayoutIfNeeded(Rect(0, 0, mWidth, mHeight)))
+			{
+				Render();
+			}
 			else if (NeedsRepaint || App.Instance.NeedsTick)
 			{
 				Render();
@@ -210,7 +214,7 @@ public abstract class SDLApp : App
 		case (uint32)SDL_EventType.SDL_EVENT_WINDOW_RESIZED:
 			mWidth = (int32)event.window.data1;
 			mHeight = (int32)event.window.data2;
-			Invalidate();
+			RequestLayout();  // geometry changed, structure didn't — no rebuild needed
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION:
 			HandleMotion(event.motion.x, event.motion.y);
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_WHEEL:

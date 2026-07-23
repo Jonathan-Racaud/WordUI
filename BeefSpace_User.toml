@@ -1,7 +1,7 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Core/InteractionStore.bf", "src/Core/SDLApp.bf", "src/Program.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Core/Color.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
@@ -43,34 +43,11 @@ DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-Active = true
-TabLabel = "InteractionStore.bf"
-TabWidth = 142.0
+TabLabel = "Color.bf"
+TabWidth = 84.0
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "src/Core/InteractionStore.bf"
-CursorPos = 5374
-VertPos = 2036.25
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "SDLApp.bf"
-TabWidth = 86.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/SDLApp.bf"
-CursorPos = 3313
-VertPos = 1254.375
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "Program.bf"
-TabWidth = 93.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Program.bf"
-CursorPos = 2686
-VertPos = 765.0
+FilePath = "src/Core/Color.bf"
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]

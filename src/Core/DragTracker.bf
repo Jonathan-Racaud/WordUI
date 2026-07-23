@@ -28,6 +28,8 @@ class DragTracker : ITracker
 				return false;
 
 			App.Instance.BeginDrag(hit.StableKey, event.X, event.Y);
+			let node = App.Instance.FindNode(hit.StableKey);
+			node?.MarkNeedsPaint();
 			App.Instance.RequestRepaint();
 			return true;
 		}
@@ -37,7 +39,9 @@ class DragTracker : ITracker
 			let app = App.Instance;
 			if (!app.DragActive)
 				return false;
+			let dragNode = app.FindNode(app.DragKey);
 			app.EndDrag();
+			dragNode?.MarkNeedsPaint();
 			app.RequestRepaint();
 			return false;
 		}
@@ -59,6 +63,8 @@ class DragTracker : ITracker
 		let b = w?.GetBehavior<OnDragBehavior>();
 		if (b != null && b.Handler != null)
 			b.Handler(dx, dy);
+		let dragNode = app.FindNode(app.DragKey);
+		dragNode?.MarkNeedsPaint();
 		app.RequestRepaint();
 		return true;
 	}

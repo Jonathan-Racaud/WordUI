@@ -32,6 +32,7 @@ class PressTracker : ITracker
 			mPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
 			let node = app.FindNode(mPressedKey);
 			StateSlots.Press.Set(node, true);
+			node?.MarkNeedsPaint();
 			app.RequestRepaint();
 			return false;
 		}
@@ -43,6 +44,7 @@ class PressTracker : ITracker
 
 			let pressedNode = app.FindNode(mPressedKey);
 			StateSlots.Press.Set(pressedNode, false);
+			pressedNode?.MarkNeedsPaint();
 			app.RequestRepaint();
 
 			let released = HitTest.At(root, event.X, event.Y);

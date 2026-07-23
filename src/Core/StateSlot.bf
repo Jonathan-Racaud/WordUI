@@ -75,5 +75,14 @@ public static class StateSlots
 		FrameworkIds.Add(1); // Hover
 		FrameworkIds.Add(2); // Press
 		FrameworkIds.Add(3); // Scroll
+
+		// Register framework slot lifecycles. All three are simple value types
+		// (bool / float) with no external resources, so all four callbacks are
+		// null — the registration exists to prove the lifecycle mechanism and
+		// serve as documentation for user capabilities (which slot IDs ≥ 100
+		// and register their own lifecycles here).
+		StateSlotRegistry.Register(1, .() { }); // Hover  — no-op lifecycle
+		StateSlotRegistry.Register(2, .() { }); // Press  — no-op lifecycle
+		StateSlotRegistry.Register(3, .() { }); // Scroll — no-op lifecycle
 	}
 }

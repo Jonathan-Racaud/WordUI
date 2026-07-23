@@ -29,6 +29,7 @@ public abstract class App
 	Widget mRoot;
 	bool mDirty = true;
 	bool mNeedsRepaint = false;
+	bool mNeedsLayout = false;
 
 	// ---- Retained runtime: the Node tree ----
 
@@ -74,11 +75,40 @@ public abstract class App
 	public void Invalidate() { mDirty = true; }
 
 	// Visual-only change (interaction state, animation tick): render without a
-	// rebuild. Cheap path — no arena teardown, no layout.
-	public void RequestRepaint() { mNeedsRepaint = true; }
+	// rebuild. Cheap path — no arena teardown, no layout. Also marks the root
+	// node paint-dirty so per-node dirty tracking stays in sync.
+	public void RequestRepaint()
+	{
+		mNeedsRepaint = true;
+		if (mRootNode != null)
+			mRootNode.MarkNeedsPaint();
+	}
+
+	// Geometry-only change (resize, content reflow): re-run layout without
+	// tearing down the arena or rebuilding the widget tree. Cheaper than a
+	// full rebuild when structure hasn't changed.
+	public void RequestLayout()
+	{
+		mNeedsLayout = true;
+		if (mRootNode != null)
+			mRootNode.MarkNeedsLayout();
+	}
 
 	public bool NeedsRepaint => mNeedsRepaint;
 	public void ClearRepaint() { mNeedsRepaint = false; }
+
+	// Runs Layout on the existing widget tree if mNeedsLayout is set.
+	// Returns true when layout was performed (so the caller knows to re-render).
+	public bool LayoutIfNeeded(Rect available)
+	{
+		if (!mNeedsLayout || mRoot == null)
+			return false;
+		Layout.Run(available, mRoot);
+		if (mRootNode != null)
+			mRootNode.ClearDirty();
+		mNeedsLayout = false;
+		return true;
+	}
 
 	// ---- Node lookup ----
 
@@ -170,6 +200,7 @@ public abstract class App
 		ReconcileTree(mRoot, live);
 
 		mDirty = false;
+		mNeedsLayout = false;  // rebuild implies relayout; clear stale flag
 		return true;
 	}
 
@@ -209,21 +240,23 @@ public abstract class App
 		if (w == null)
 			return null;
 
+		bool isNew = false;
 		Node node;
 		if (!mNodeIndex.TryGetValue(w.StableKey, out node))
 		{
 			// First time seeing this key: create a fresh Node.
 			node = new Node(w.StableKey);
 			mNodeIndex[w.StableKey] = node;
+			isNew = true;
 		}
 
 		// Update parent/child links (the Widget tree structure may have changed).
 		node.Parent = parent;
 		node.Children.Clear();
 
-		// Prune stale state from the reused Node: collect the set of live slot
-		// ids from IInteractionState properties on the current widget plus the
-		// framework-reserved ids (trackers write those regardless of properties).
+		// Collect the set of live slot ids from IInteractionState properties on
+		// the current widget plus the framework-reserved ids (trackers write
+		// those regardless of properties). These drive pruning and lifecycle dispatch.
 		HashSet<int> liveSlots = scope .();
 		for (let id in StateSlots.FrameworkIds)
 			liveSlots.Add(id);
@@ -233,8 +266,16 @@ public abstract class App
 			if (s != null)
 				liveSlots.Add(s.StateId);
 		}
+
+		// Prune stale state before lifecycle dispatch: OnCleanup fires inside
+		// PruneState for every slot being removed, so the capability can read
+		// its data one last time.
 		node.PruneState(liveSlots);
 		node.PruneClocks(liveSlots);
+
+		// Fire lifecycle callbacks (OnCreate / OnReuse) top-down, before children
+		// are reconciled, so a parent capability can initialise before its subtree.
+		node.OnReconciled(isNew, liveSlots);
 
 		// Recurse into children.
 		let children = w.GetComponent<Children>();

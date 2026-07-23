@@ -16,6 +16,11 @@ namespace WordUI;
 //
 // Animation clocks are stored separately because they have internal structure
 // (progress, target, duration, curve) and their own lifecycle (self-pruning).
+//
+// Lifecycle tracking (mIsNew, mInitializedSlots) lets capabilities react to
+// node creation, reuse, state cleanup, and disposal via the StateSlotRegistry.
+// Node itself knows nothing about what any lifecycle callback does — it only
+// fires them at the right reconciliation points.
 public class Node
 {
 	public int StableKey;
@@ -46,6 +51,33 @@ public class Node
 	Dictionary<int, Clock> mClocks = new .() ~ delete _;
 
 	int mLastTickMs = -1;
+
+	// ---- Lifecycle tracking ----
+
+	// True until the first reconciliation completes for this node.
+	// Capabilities use this to distinguish first-mount initialisation from reuse.
+	public bool IsNew => mIsNew;
+	bool mIsNew = true;
+
+	// Slots that have had their OnCreate lifecycle callback fired on this node.
+	// Prevents double-firing OnCreate when a slot is live across multiple
+	// reconciliations.
+	HashSet<int> mInitializedSlots = new .() ~ delete _;
+
+	// ---- Invalidation flags ----
+	// Per-node dirty tracking for partial invalidation. When a capability writes
+	// state that affects layout or paint, it calls MarkNeedsLayout() or
+	// MarkNeedsPaint() on the affected node. The flag propagates up to root so
+	// the framework can find dirty subtrees in a single root→leaf walk without
+	// knowing what capability caused the invalidation.
+	bool mNeedsLayout;
+	bool mNeedsPaint;
+
+	// True if this node or any descendant needs layout.
+	public bool HasLayoutDirty => mNeedsLayout;
+
+	// True if this node or any descendant needs paint.
+	public bool HasPaintDirty => mNeedsPaint;
 
 	public this(int key)
 	{
@@ -104,6 +136,70 @@ public class Node
 	public void SetInt(int slot, int value)
 	{
 		SetState(slot, Variant.Create(value));
+	}
+
+	// ---- Invalidation ----
+
+	// Mark this node's subtree as needing layout. Propagates up the parent
+	// chain so the framework can discover dirty subtrees from the root.
+	// Idempotent: calling it twice on the same node is a no-op.
+	public void MarkNeedsLayout()
+	{
+		if (mNeedsLayout)
+			return;
+		mNeedsLayout = true;
+		if (Parent != null)
+			Parent.MarkChildLayoutDirty();
+	}
+
+	// Mark this node's subtree as needing paint. Same parent-chain propagation
+	// as MarkNeedsLayout, so draw walks can skip clean subtrees.
+	public void MarkNeedsPaint()
+	{
+		if (mNeedsPaint)
+			return;
+		mNeedsPaint = true;
+		if (Parent != null)
+			Parent.MarkChildPaintDirty();
+	}
+
+	// Called by a child when it becomes layout-dirty. Propagates upward.
+	void MarkChildLayoutDirty()
+	{
+		if (mNeedsLayout)
+			return;
+		mNeedsLayout = true;
+		if (Parent != null)
+			Parent.MarkChildLayoutDirty();
+	}
+
+	// Called by a child when it becomes paint-dirty. Propagates upward.
+	void MarkChildPaintDirty()
+	{
+		if (mNeedsPaint)
+			return;
+		mNeedsPaint = true;
+		if (Parent != null)
+			Parent.MarkChildPaintDirty();
+	}
+
+	// Recursively clear all dirty flags in this subtree. Called after the
+	// framework has processed the invalidation (layout or paint pass).
+	public void ClearDirty()
+	{
+		mNeedsLayout = false;
+		mNeedsPaint = false;
+		for (let child in Children)
+			child.ClearDirty();
+	}
+
+	// Clear only paint-dirty flags, leaving layout-dirty untouched. Used after
+	// a paint-only pass so pending layout work isn't lost.
+	public void ClearPaintDirty()
+	{
+		mNeedsPaint = false;
+		for (let child in Children)
+			child.ClearPaintDirty();
 	}
 
 	// ---- Animation clocks ----
@@ -185,10 +281,11 @@ public class Node
 
 	// ---- State pruning ----
 
-	// Remove every mState key not in `liveSlots`. Called after reconciliation
-	// for Nodes that were reused: a widget at the same StableKey may have
-	// dropped a capability (e.g. HoverState removed), and its stale slot data
-	// should be cleaned so mState doesn't grow unboundedly.
+	// Remove every mState key not in `liveSlots`, firing OnCleanup for each
+	// before removal. Called after reconciliation for Nodes that were reused:
+	// a widget at the same StableKey may have dropped a capability (e.g.
+	// HoverState removed), and its stale slot data should be cleaned so mState
+	// doesn't grow unboundedly.
 	public void PruneState(HashSet<int> liveSlots)
 	{
 		List<int> dead = scope .();
@@ -198,7 +295,14 @@ public class Node
 				dead.Add(pair.key);
 		}
 		for (let k in dead)
+		{
+			// Fire OnCleanup so the capability can read its data one last time
+			// and release any external resources before the slot is removed.
+			let lc = StateSlotRegistry.Get(k);
+			if (lc.OnCleanup != null)
+				lc.OnCleanup(this, k);
 			mState.Remove(k);
+		}
 	}
 
 	// Same for animation clocks: remove clocks whose stateId is no longer
@@ -215,15 +319,64 @@ public class Node
 			mClocks.Remove(k);
 	}
 
+	// ---- Lifecycle dispatch ----
+
+	// Fire the appropriate lifecycle callbacks for every live slot after a
+	// reconciliation pass. Called once per node per rebuild.
+	//
+	// - New node (isNew=true): fires OnCreate for every live slot.
+	// - Reused node (isNew=false): fires OnCreate for slots that appear for the
+	//   first time on this node, and OnReuse for slots that already existed.
+	//
+	// OnCleanup is handled separately by PruneState (called before this method
+	// in the reconciliation flow), and OnDispose by Dispose().
+	public void OnReconciled(bool isNew, HashSet<int> liveSlots)
+	{
+		for (let slot in liveSlots)
+		{
+			let lc = StateSlotRegistry.Get(slot);
+			if (isNew)
+			{
+				if (lc.OnCreate != null)
+					lc.OnCreate(this, slot);
+				mInitializedSlots.Add(slot);
+			}
+			else if (!mInitializedSlots.Contains(slot))
+			{
+				// Slot is live on this widget for the first time (even though
+				// the node existed before — the widget gained a new capability).
+				if (lc.OnCreate != null)
+					lc.OnCreate(this, slot);
+				mInitializedSlots.Add(slot);
+			}
+			else
+			{
+				if (lc.OnReuse != null)
+					lc.OnReuse(this, slot);
+			}
+		}
+
+		mIsNew = false;
+	}
+
 	// ---- Lifecycle ----
 
-	// Dispose this node's own resources (state dictionary, clocks). Children
-	// are NOT recursively disposed here: the orphan loop in App.ReconcileTree
-	// disposes every orphaned Node individually. A reused child is reattached
-	// via ReconcileWidget, which calls Children.Clear() first to drop the old
-	// reference. Recursing here would double-free orphaned children.
+	// Dispose this node's own resources. Fires OnDispose for every state slot
+	// still holding data so capabilities can release external resources (timers,
+	// native handles, subscriptions). Children are NOT recursively disposed
+	// here: the orphan loop in App.ReconcileTree disposes every orphaned Node
+	// individually. A reused child is reattached via ReconcileWidget, which
+	// calls Children.Clear() first to drop the old reference. Recursing here
+	// would double-free orphaned children.
 	public void Dispose()
 	{
+		// Fire OnDispose for every slot that still has data in this node.
+		for (let pair in mState)
+		{
+			let lc = StateSlotRegistry.Get(pair.key);
+			if (lc.OnDispose != null)
+				lc.OnDispose(this, pair.key);
+		}
 		Children.Clear();
 	}
 

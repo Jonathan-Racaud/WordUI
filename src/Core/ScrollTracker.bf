@@ -54,6 +54,7 @@ class ScrollTracker : ITracker
 		float next = Math.Clamp(current - event.WheelY * StepPx, 0, maxOffset);
 		if (node != null)
 			StateSlots.Scroll.Set(node, next);
+		node?.MarkNeedsPaint();
 
 		let b = hit.GetBehavior<OnScrollBehavior>();
 		if (b != null && b.Handler != null)

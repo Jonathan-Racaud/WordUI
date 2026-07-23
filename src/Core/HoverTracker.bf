@@ -26,6 +26,7 @@ class HoverTracker : ITracker
 		{
 			let prev = app.FindNode(mHoveredKey);
 			StateSlots.Hover.Set(prev, false);
+			prev?.MarkNeedsPaint();
 		}
 
 		// Set new hover.
@@ -33,6 +34,7 @@ class HoverTracker : ITracker
 		{
 			let node = app.FindNode(key);
 			StateSlots.Hover.Set(node, true);
+			node?.MarkNeedsPaint();
 		}
 
 		mHoveredKey = key;
