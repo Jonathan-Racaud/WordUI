@@ -42,11 +42,45 @@ public abstract class App
 	// persistent state without a tree walk.
 	Dictionary<int, Node> mNodeIndex = new .() ~ delete _;
 
-	// ---- Drag / pointer capture (per-pointer-session, not per-widget) ----
+	// ---- Drag / pointer capture (per-pointer-session) ----
 
-	int mDragKey = 0;
-	float mDragDX, mDragDY;
-	float mDragLastX, mDragLastY;
+	// The active capture state. InputDispatcher reads this via CaptureActive/CaptureKey;
+	// writes via CaptureBegin/CaptureUpdate/CaptureEnd so the struct field (not a copy)
+	// is mutated.
+	PointerCapture mCapture;
+
+	// ---- Focus ----
+
+	// StableKey of the currently focused widget, or 0 if none.
+	// Set by FocusHandler on MouseDown; read by InputDispatcher for key routing
+	// and by KeyboardHandler to check if its widget has focus.
+	public int FocusedKey;
+
+	// Returns true while any IInputHandler holds a pointer capture.
+	public bool CaptureActive => mCapture.Active;
+
+	// Returns the StableKey of the capturing widget, or 0.
+	public int CaptureKey => mCapture.Key;
+
+	// Forwarding mutators that directly mutate mCapture fields (not struct copies).
+	public void CaptureBegin(int key, float x, float y)
+	{
+		mCapture.Key = key;
+		mCapture.LastX = x;
+		mCapture.LastY = y;
+	}
+	public (float dx, float dy) CaptureUpdate(float x, float y)
+	{
+		let dx = x - mCapture.LastX;
+		let dy = y - mCapture.LastY;
+		mCapture.LastX = x;
+		mCapture.LastY = y;
+		return (dx, dy);
+	}
+	public void CaptureEnd()
+	{
+		mCapture.Key = 0;
+	}
 
 	// ---- Event trackers (registered by the backend) ----
 
@@ -65,9 +99,6 @@ public abstract class App
 	// ---- Public accessors ----
 
 	protected Widget Root => mRoot;
-
-	public bool DragActive => mDragKey != 0;
-	public int DragKey => mDragKey;
 
 	protected abstract void Build();
 
@@ -143,46 +174,17 @@ public abstract class App
 	}
 
 	// True while any ITickable in the retained tree needs frame updates, or a
-	// drag is active — drives the event loop to use a frame-clock timeout
-	// instead of blocking in SDL_WaitEvent.
+	// pointer capture is active — drives the event loop to use a frame-clock
+	// timeout instead of blocking in SDL_WaitEvent.
 	public bool NeedsTick
 	{
 		get
 		{
-			if (mDragKey != 0)
+			if (mCapture.Active)
 				return true;
 			return mRootNode != null && mRootNode.HasActiveTicks;
 		}
 	}
-
-	// ---- Drag state ----
-
-	public void BeginDrag(int key, float x, float y)
-	{
-		mDragKey = key;
-		mDragDX = 0; mDragDY = 0;
-		mDragLastX = x; mDragLastY = y;
-	}
-
-	// Returns the incremental delta since the last motion.
-	public (float dx, float dy) UpdateDrag(float x, float y)
-	{
-		let dx = x - mDragLastX;
-		let dy = y - mDragLastY;
-		mDragDX += dx; mDragDY += dy;
-		mDragLastX = x; mDragLastY = y;
-		return (dx, dy);
-	}
-
-	public void EndDrag()
-	{
-		mDragKey = 0;
-		mDragDX = 0; mDragDY = 0;
-	}
-
-	// Accumulated offset for the widget currently being dragged (else zero).
-	public (float x, float y) DragOffset(int key) =>
-		(key == mDragKey) ? (mDragDX, mDragDY) : (0f, 0f);
 
 	// ---- Build lifecycle ----
 
@@ -264,17 +266,27 @@ public abstract class App
 		node.Parent = parent;
 		node.Children.Clear();
 
-		// Collect the set of live slot ids from IInteractionState properties on
-		// the current widget plus the framework-reserved ids (trackers write
-		// those regardless of properties). These drive pruning and lifecycle dispatch.
+		// Collect live slot ids from IInteractionState properties (for animation
+		// clock keys) and IHasStateSlots behaviors (for state slot keys on the
+		// retained Node). These drive pruning and lifecycle dispatch — only slots
+		// declared by actual capabilities on this widget survive pruning.
 		HashSet<int> liveSlots = scope .();
-		for (let id in StateSlots.FrameworkIds)
-			liveSlots.Add(id);
+
+		// The hover slot is managed globally by InputDispatcher (not a per-widget
+		// behavior), so it's always preserved regardless of widget capabilities.
+		liveSlots.Add(StateSlots.Hover.Id);
+
 		for (let p in w.Properties)
 		{
 			let s = p as IInteractionState;
 			if (s != null)
 				liveSlots.Add(s.StateId);
+		}
+		for (let b in w.Behaviors)
+		{
+			let hs = b as IHasStateSlots;
+			if (hs != null)
+				hs.CollectSlots(liveSlots);
 		}
 
 		// Prune stale state before lifecycle dispatch: OnCleanup fires inside

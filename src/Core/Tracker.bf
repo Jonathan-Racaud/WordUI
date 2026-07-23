@@ -5,14 +5,13 @@ namespace WordUI;
 // An event-tracker plugged into the framework's input dispatch loop.
 // When SDLApp (or any backend) receives a pointer event or motion, it
 // iterates registered trackers in registration order, calling HandleEvent
-// and HandleMotion. A tracker returns true to consume the event and stop
-// iteration — this is how DragTracker prevents PressTracker from seeing a
-// MouseDown that starts a drag, and prevents HoverTracker from flickering
-// during a drag.
+// and HandleMotion. A tracker returning true consumes the event and stops
+// iteration.
 //
-// Framework trackers (HoverTracker, PressTracker, ScrollTracker, DragTracker)
-// implement this interface. User-authored trackers implement it as well and
-// register via App.RegisterTracker — no SDLApp modification needed.
+// The built-in InputDispatcher is the primary tracker: it hit-tests, walks
+// the widget chain leaf→root, and routes events to IInputHandler behaviors.
+// User-authored trackers implement this interface as well and register via
+// App.RegisterTracker — no SDLApp modification needed.
 public interface ITracker
 {
 	// Called for button/wheel events. Return true if consumed.

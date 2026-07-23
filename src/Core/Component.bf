@@ -22,6 +22,15 @@ public abstract class Component
 
 	// ---- Render pipeline hooks (called in fixed z-order by DrawWidget) ----
 
+	// Optional render-time offset contributed by this component. The draw loop
+	// accumulates offsets from all components on a widget and applies them to
+	// the child rendering origin — same mechanism drag and scroll both use.
+	// Default: (0, 0).
+	public virtual (float ox, float oy) GetRenderOffset(Widget w, Node node)
+	{
+		return (0, 0);
+	}
+
 	// Fills behind content and children. Default: no-op.
 	public virtual void DrawBackground(Painter painter, Widget widget, Rect bounds)
 	{

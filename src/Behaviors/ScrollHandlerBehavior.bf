@@ -1,20 +1,28 @@
 using System;
+using System.Collections;
 
 namespace WordUI;
 
-// Wheel dispatch. Unlike drag there is no capture: each wheel event is a discrete
-// impulse. HandleEvent finds the scrollable under the pointer, adjusts its
-// persistent offset in the retained Node (clamped to the content extent), and
-// requests a repaint — no rebuild, mirroring the drag/press cheap path. The
-// offset is applied at draw time in SDLApp.DrawWidget.
+// Wheel/scroll interaction handler. Carries its own ScrollHandler delegate — no
+// separate delegate-holder behavior. On MouseWheel, finds the deepest ScrollView-bearing
+// widget under the pointer, adjusts its persistent scroll offset in the retained Node
+// (clamped to content extent), fires the handler, and requests a repaint — no rebuild.
+// The offset is applied at draw by ScrollView.GetRenderOffset.
+//
+// Does NOT claim capture (returns false from HandleEvent). Wheel events are discrete
+// impulses, not a press-drag gesture, so they always route through the hit chain
+// regardless of any active capture.
+//
+// Implements IHasStateSlots so the reconciliation pass preserves the Scroll state
+// slot on this widget's Node.
 //
 // State slot: StateSlots.Scroll (3) — float stored on the retained Node.
-class ScrollTracker : ITracker
+public class ScrollHandlerBehavior : Behavior, IInputHandler, IHasStateSlots
 {
-	// Pixels of scroll per wheel notch.
-	const float StepPx = 30f;
+	public ScrollHandler Handler;   // null = no scroll callback
+	const float StepPx = 30f;       // pixels of scroll per wheel notch
 
-	public bool HandleEvent(Widget root, InputEvent event)
+	public bool HandleEvent(Widget root, Widget owner, InputEvent event)
 	{
 		if (event.Type != .MouseWheel)
 			return false;
@@ -56,23 +64,31 @@ class ScrollTracker : ITracker
 			StateSlots.Scroll.Set(node, next);
 		node?.MarkNeedsPaint();
 
-		let b = hit.GetBehavior<OnScrollBehavior>();
-		if (b != null && b.Handler != null)
-			b.Handler(next);
+		// Fire the scroll handler on the scrollable widget (hit), not owner.
+		let sh = hit.GetBehavior<ScrollHandlerBehavior>();
+		if (sh != null && sh.Handler != null)
+			sh.Handler(next);
 
 		app.RequestRepaint();
 		return false;
 	}
 
-	public bool HandleMotion(Widget root, float x, float y)
+	public bool HandleMotion(Widget root, Widget owner, float x, float y)
 	{
 		return false;
 	}
 
-	// Deepest widget carrying a ScrollView whose rect contains the point. Because
-	// a scroll container's rect encloses its viewport (and therefore the pointer),
-	// a wheel over a child resolves to the enclosing scrollable — bubbling without
-	// a parent pointer.
+	public void CollectSlots(HashSet<int> slots)
+	{
+		slots.Add(StateSlots.Scroll.Id);
+	}
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" OnScroll");
+	}
+
+	// Deepest widget carrying a ScrollView whose rect contains the point.
 	static Widget FindScrollableAt(Widget root, float x, float y)
 	{
 		return Find(root, x, y, null);

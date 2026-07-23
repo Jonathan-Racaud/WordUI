@@ -38,15 +38,12 @@ public abstract class SDLApp : App
 		mPainter = new Painter(mRenderer, mDefaultFont);
 		sDefaultFont = mDefaultFont;
 
-		// Register event trackers in dispatch-priority order.
-		// DragTracker first: its HandleMotion returns true during a drag,
-		// short-circuiting HoverTracker to prevent flicker. Its HandleEvent
-		// returns true on MouseDown when a drag starts, so PressTracker
-		// (next in order) is skipped.
-		RegisterTracker(new DragTracker());
-		RegisterTracker(new PressTracker());
-		RegisterTracker(new ScrollTracker());
-		RegisterTracker(new HoverTracker());
+		// Register the single input dispatcher. It hit-tests, walks the widget
+		// chain leaf→root, and routes events to IInputHandler behaviors on each
+		// widget. Any IInputHandler returning true from HandleEvent on MouseDown
+		// claims the pointer capture. User-authored interaction types need only
+		// implement IInputHandler — no tracker registration needed.
+		RegisterTracker(new InputDispatcher());
 	}
 
 	public static TTF_Font* sDefaultFont;
@@ -77,24 +74,30 @@ public abstract class SDLApp : App
 		DrawWidget(Root, 0, 0);
 	}
 
-	// (ox,oy) is the accumulated render-time offset from an ancestor drag. When
-	// this widget is the one being dragged, its own offset is added and inherited
-	// by its subtree — the visual follows the pointer without any relayout.
+	// (ox,oy) is the accumulated render-time offset from ancestor offsets
+	// (drag, scroll, etc.). Each component on a widget may contribute an offset
+	// via GetRenderOffset — the draw loop accumulates all of them into the
+	// child rendering origin. Zero hardcoded knowledge of specific interaction
+	// types in the draw pipeline.
 	void DrawWidget(Widget w, float ox, float oy)
 	{
 		if (w == null)
 			return;
 
 		let app = App.Instance;
+		let node = app.FindNode(w.StableKey);
 
-		var ox, oy;
-		if (app.DragActive && w.StableKey == app.DragKey)
+		// Accumulate render offsets from every component on this widget.
+		var tx = ox;
+		var ty = oy;
+		for (let c in w.Components)
 		{
-			let (dx, dy) = app.DragOffset(w.StableKey);
-			ox += dx; oy += dy;
+			let (cox, coy) = c.GetRenderOffset(w, node);
+			tx += cox;
+			ty += coy;
 		}
 
-		Rect bounds = .(w.mRect.X + ox, w.mRect.Y + oy, w.mRect.Width, w.mRect.Height);
+		Rect bounds = .(w.mRect.X + tx, w.mRect.Y + ty, w.mRect.Width, w.mRect.Height);
 
 		// 1. Background — fills behind everything (Interior)
 		for (let c in w.Components)
@@ -104,25 +107,12 @@ public abstract class SDLApp : App
 		for (let c in w.Components)
 			c.DrawContent(mPainter, w, bounds);
 
-		// 3. Children — recurse, optionally clipped to this widget's box and
-		// translated by its persistent scroll offset (same render-time offset
-		// mechanism as drag, folded into a private childOx/childOy).
-		var childOx = ox, childOy = oy;
+		// 3. Children — recurse, optionally clipped to this widget's box.
+		var childOx = tx, childOy = ty;
 
 		bool clip = w.GetComponent<ClipRegion>() != null;
 		if (clip)
 			mPainter.PushClip(bounds);
-
-		if (w.GetComponent<ScrollView>() != null)
-		{
-			let node = app.FindNode(w.StableKey);
-			let off = node != null ? StateSlots.Scroll.Get(node) : 0f;
-			let stack = w.GetComponent<StackLayout>();
-			if (stack == null || stack.Axis == .Vertical)
-				childOy -= off;
-			else
-				childOx -= off;
-		}
 
 		let children = w.GetComponent<Children>();
 		if (children != null)
@@ -229,6 +219,12 @@ public abstract class SDLApp : App
 		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
 			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
 				DispatchEvent(.() { Type = .MouseUp, X = event.button.x, Y = event.button.y });
+		case (uint32)SDL_EventType.SDL_EVENT_KEY_DOWN:
+			DispatchEvent(.() {
+				Type = .KeyDown,
+				KeyCode = (int)event.key.key,
+				KeyModifiers = (int)event.key.mod
+			});
 		default:
 		}
 	}
@@ -242,9 +238,8 @@ public abstract class SDLApp : App
 				return;
 	}
 
-	// Dispatch pointer motion through registered trackers. DragTracker
-	// returns true while a drag is active, short-circuiting HoverTracker
-	// to prevent flicker during a drag operation.
+	// Dispatch pointer motion through registered trackers. The InputDispatcher
+	// handles hit-testing, capture routing, and hover enter/leave.
 	void HandleMotion(float x, float y)
 	{
 		for (let t in App.Instance.Trackers)

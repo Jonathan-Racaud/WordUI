@@ -1,0 +1,3554 @@
+
+───── ./Core/Children.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// The one component the core knows about: CloseContainer fills it. Any widget
+// holding a Children component is a container as far as walks are concerned.
+public class Children : Component
+{
+	public List<Widget> Items;
+}
+
+───── ./Core/StackItem.bf ─────
+using System;
+
+namespace WordUI;
+
+// The build stack holds tagged items; every pop validates the tag so a misused
+// word fails with a named error instead of building a scrambled tree.
+public enum StackItem
+{
+	case Str(String);
+	case Int(int);
+	case Float(float);
+	case Double(double);
+	case Bool(bool);
+	case Elem(Widget);
+	case Pen(Component);
+	case Mark(StringView);
+
+	public void ToString(String buf)
+	{
+		switch (this)
+		{
+		case .Str(let s): buf.AppendF("Str(\"{}\")", s);
+		case .Int(let v): buf.AppendF("Int({})", v);
+		case .Float(let v): buf.AppendF("Float({})", v);
+		case .Double(let v): buf.AppendF("Double({})", v);
+		case .Bool(let v): buf.AppendF("Bool({})", v);
+		case .Elem(let w): buf.AppendF("Widget({})", w.Name);
+		case .Pen(let c):  buf.AppendF("Pen({})", c.GetType().GetName(.. scope .()));
+		case .Mark(let name): buf.AppendF("Marker({})", name);
+		}
+	}
+}
+
+───── ./Core/Primitives.bf ─────
+using System;
+
+namespace WordUI;
+
+// The primitive data words, mirroring the PopStr/PopInt/PopFloat/PopBool core
+// ops. Bare `Int(…)`/`Float(…)` words are impossible in Beef: Int and Float
+// are corlib struct names and type constructors win resolution over
+// using-static methods.
+//
+// PushStr copies into the build arena so callers may pass scope-allocated
+// strings; value types are stored in the stack item. Complex objects
+// (structs, lists, dictionaries) are deferred to their own planning phase.
+extension UI
+{
+	public static void PushStr(StringView s)
+	{
+		Push(.Str(new:BuildAlloc String(s)));
+	}
+	public static void Str(StringView s) => PushStr(s);
+
+	public static void PushInt(int v)
+	{
+		Push(.Int(v));
+	}
+	public static void Number(int v) => PushInt(v);
+
+	public static void PushFloat(float v)
+	{
+		Push(.Float(v));
+	}
+	public static void Number(float v) => PushFloat(v);
+
+	public static void PushDouble(double v)
+	{
+		Push(.Double(v));
+	}
+	public static void Number(double v) => PushDouble(v);
+
+
+	public static void PushBool(bool v)
+	{
+		Push(.Bool(v));
+	}
+	public static void Bool(bool v) => PushBool(v);
+}
+
+───── ./Core/Rect.bf ─────
+using System;
+
+namespace WordUI;
+
+// Axis-aligned rectangle in layout space — the shared currency between
+// layout, rendering, and hit-testing.
+public struct Rect
+{
+	public float X, Y, Width, Height;
+
+	public this(float x, float y, float w, float h)
+	{
+		X = x; Y = y; Width = w; Height = h;
+	}
+
+	public float Right => X + Width;
+	public float Bottom => Y + Height;
+}
+
+───── ./Core/Size.bf ─────
+using System;
+
+namespace WordUI;
+
+// Intrinsic size returned by Component.Measure during the layout pass.
+public struct Size
+{
+	public float Width, Height;
+
+	public this(float w, float h)
+	{
+		Width = w; Height = h;
+	}
+}
+
+───── ./Core/Layout.bf ─────
+using System;
+
+namespace WordUI;
+
+// Flex layout pass: constraints-down, sizes-up, sum-main/max-cross,
+// leftover→Spacer. Runs after Build(), stores a Rect on every widget.
+static class Layout
+{
+	// Entry point: lay out the entire tree within the given rect.
+	public static void Run(Rect available, Widget root)
+	{
+		LayoutWidget(available, root);
+	}
+
+	static void LayoutWidget(Rect available, Widget widget)
+	{
+		widget.mRect = available;
+
+		let children = widget.GetComponent<Children>();
+		if (children == null)
+			return;
+
+		let stack = widget.GetComponent<StackLayout>();
+		if (stack == null)
+			return;
+
+		// Compute inner rect (available minus padding)
+		float pad = widget.Padding;
+		Rect inner = .(
+			available.X + pad,
+			available.Y + pad,
+			available.Width - 2 * pad,
+			available.Height - 2 * pad
+		);
+
+		bool isVertical = stack.Axis == .Vertical;
+
+		// Count spacers and measure non-spacer children
+		int spacerCount = 0;
+		int itemCount = children.Items.Count;
+		float[] mainSizes = scope float[itemCount];
+		float[] crossSizes = scope float[itemCount];
+
+		float totalMain = 0;
+		float maxCross = 0;
+
+		for (int i = 0; i < itemCount; i++)
+		{
+			let child = children.Items[i];
+			if (child.Name == "Spacer")
+			{
+				spacerCount++;
+				mainSizes[i] = -1; // marker
+				continue;
+			}
+
+			Size constraint = isVertical
+				? .(inner.Width, float.MaxValue)
+				: .(float.MaxValue, inner.Height);
+
+			let size = MeasureWidget(child, constraint);
+			float main = isVertical ? size.Height : size.Width;
+			float cross = isVertical ? size.Width : size.Height;
+			mainSizes[i] = main;
+			crossSizes[i] = cross;
+			totalMain += main;
+			maxCross = Math.Max(maxCross, cross);
+		}
+
+		// Spacing between non-spacer items
+		int nonSpacerCount = itemCount - spacerCount;
+		if (nonSpacerCount > 1)
+			totalMain += stack.Spacing * (nonSpacerCount - 1);
+
+		// Distribute leftover main-axis space to spacers
+		float mainAvailable = isVertical ? inner.Height : inner.Width;
+		float leftover = mainAvailable - totalMain;
+		float spacerSize = spacerCount > 0
+			? Math.Max(0, leftover / spacerCount)
+			: 0;
+
+		// Assign rects to children
+		float mainPos = isVertical ? inner.Y : inner.X;
+
+		for (int i = 0; i < itemCount; i++)
+		{
+			let child = children.Items[i];
+
+			if (child.Name == "Spacer")
+			{
+				child.mRect = isVertical
+					? Rect(inner.X, mainPos, inner.Width, spacerSize)
+					: Rect(mainPos, inner.Y, spacerSize, inner.Height);
+				mainPos += spacerSize;
+				continue;
+			}
+
+			float childMain = mainSizes[i];
+			float childCrossAvailable = isVertical ? inner.Width : inner.Height;
+			float childCrossSize = crossSizes[i];
+
+			// Apply cross-axis alignment from LayoutHint (default: Stretch).
+			// A sizing constraint on the cross axis overrides Stretch so that
+			// e.g. Height(.Fixed(20)) inside an HStack produces a 20px-tall
+			// child instead of forcing it to fill the row height.
+			float childCrossPos;
+			float childCrossUsed;
+			var hint = child.GetProperty<LayoutHint>();
+			bool hasCrossConstraint = hint != null &&
+				(isVertical ? !(hint.Width case .Unconstrained) : !(hint.Height case .Unconstrained));
+
+			if (hint != null && hint.CrossAlign != .Stretch)
+			{
+				childCrossUsed = childCrossSize;
+				if (hint.CrossAlign == .Center)
+					childCrossPos = (isVertical ? inner.X : inner.Y) + (childCrossAvailable - childCrossSize) / 2;
+				else if (hint.CrossAlign == .End)
+					childCrossPos = (isVertical ? inner.X : inner.Y) + childCrossAvailable - childCrossSize;
+				else // .Start
+					childCrossPos = isVertical ? inner.X : inner.Y;
+			}
+			else if (hasCrossConstraint)
+			{
+				// Sizing constraint overrides Stretch; position at start
+				childCrossUsed = childCrossSize;
+				childCrossPos = isVertical ? inner.X : inner.Y;
+			}
+			else
+			{
+				childCrossPos = isVertical ? inner.X : inner.Y;
+				childCrossUsed = childCrossAvailable;
+			}
+
+			Rect childRect = isVertical
+				? Rect(childCrossPos, mainPos, childCrossUsed, childMain)
+				: Rect(mainPos, childCrossPos, childMain, childCrossUsed);
+
+			LayoutWidget(childRect, child); // recurse
+
+			mainPos += childMain + stack.Spacing;
+		}
+	}
+
+	// Measure a widget's intrinsic size. For containers with StackLayout,
+	// measures children and computes the total; for leaves, asks components.
+	static Size MeasureWidget(Widget widget, Size constraint)
+	{
+		let children = widget.GetComponent<Children>();
+		let stack = widget.GetComponent<StackLayout>();
+
+		// Container: measure children and compute flex total
+		if (children != null && stack != null)
+		{
+			float pad = widget.Padding;
+			bool isVertical = stack.Axis == .Vertical;
+
+			float totalMain = 0;
+			float maxCross = 0;
+			int spacerCount = 0;
+
+			for (let child in children.Items)
+			{
+				if (child.Name == "Spacer")
+				{
+					spacerCount++;
+					continue;
+				}
+
+				Size childConstraint = isVertical
+					? .(constraint.Width - 2 * pad, float.MaxValue)
+					: .(float.MaxValue, constraint.Height - 2 * pad);
+
+				let size = MeasureWidget(child, childConstraint);
+				totalMain += isVertical ? size.Height : size.Width;
+				maxCross = Math.Max(maxCross, isVertical ? size.Width : size.Height);
+			}
+
+			// Spacing between non-spacer items
+			int nonSpacerCount = children.Items.Count - spacerCount;
+			if (nonSpacerCount > 1)
+				totalMain += stack.Spacing * (nonSpacerCount - 1);
+
+			float w = isVertical ? maxCross : totalMain;
+			float h = isVertical ? totalMain : maxCross;
+			w += pad * 2;
+			h += pad * 2;
+			var hint = widget.GetProperty<LayoutHint>();
+			if (hint != null)
+			{
+				w = hint.Width.Apply(w, constraint.Width);
+				h = hint.Height.Apply(h, constraint.Height);
+			}
+			return .(w, h);
+		}
+
+		// Leaf: ask components
+		float cw = 0, ch = 0;
+		for (let c in widget.Components)
+		{
+			let size = c.Measure(constraint);
+			cw = Math.Max(cw, size.Width);
+			ch = Math.Max(ch, size.Height);
+		}
+		cw += widget.Padding * 2;
+		ch += widget.Padding * 2;
+		var hint = widget.GetProperty<LayoutHint>();
+		if (hint != null)
+		{
+			cw = hint.Width.Apply(cw, constraint.Width);
+			ch = hint.Height.Apply(ch, constraint.Height);
+		}
+		return .(cw, ch);
+	}
+}
+
+───── ./Core/HitTest.bf ─────
+using System;
+
+namespace WordUI;
+
+// Shared hit-test utility: given a point in window coordinates, walks the
+// widget tree and returns the leaf-most widget whose mRect contains the
+// point. Returns null if no widget is hit.
+static class HitTest
+{
+	public static Widget At(Widget root, float x, float y)
+	{
+		return Find(root, x, y, null);
+	}
+
+	static Widget Find(Widget w, float x, float y, Widget best)
+	{
+		if (w == null)
+			return best;
+
+		Widget current = best;
+		if (x >= w.mRect.X && x < w.mRect.Right &&
+			y >= w.mRect.Y && y < w.mRect.Bottom)
+		{
+			current = w;
+		}
+
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				current = Find(child, x, y, current);
+			}
+		}
+		return current;
+	}
+}
+
+───── ./Core/Component.bf ─────
+using System;
+
+namespace WordUI;
+
+// The single inheritance point of the framework. A component carries one
+// capability's data and overrides framework hooks for its behavior. Framework
+// components and user components are peers: every pass dispatches through the
+// same virtual hooks, so a user's component participates in diagnostics,
+// layout, and rendering without any registration step.
+public abstract class Component
+{
+	// Contributes this component's detail to the tree dump. Append nothing to
+	// stay silent (e.g. when all fields hold default values).
+	public virtual void Describe(String buf) {}
+
+	// Intrinsic sizing for the layout pass. The constraint is the available
+	// space in the cross axis (unbounded in the main axis). Default: zero.
+	public virtual Size Measure(Size constraint)
+	{
+		return .(0, 0);
+	}
+
+	// ---- Render pipeline hooks (called in fixed z-order by DrawWidget) ----
+
+	// Fills behind content and children. Default: no-op.
+	public virtual void DrawBackground(Painter painter, Widget widget, Rect bounds)
+	{
+	}
+
+	// Draws the widget's own content (text, custom shapes). Default: no-op.
+	public virtual void DrawContent(Painter painter, Widget widget, Rect bounds)
+	{
+	}
+
+	// Strokes on top of content and children. Default: no-op.
+	public virtual void DrawOverlay(Painter painter, Widget widget, Rect bounds)
+	{
+	}
+}
+
+───── ./Core/Property.bf ─────
+using System;
+
+namespace WordUI;
+
+// Pure data attached to a widget: carries styling preferences, layout hints,
+// interaction states — anything that other code queries but the draw pipeline
+// does not iterate. Properties have no Measure, Draw*, or other pipeline hooks.
+// They participate only in Describe (tree dump).
+public abstract class Property
+{
+	// Contributes this property's detail to the tree dump. Append nothing to
+	// stay silent (e.g. when all fields hold default values).
+	public virtual void Describe(String buf) {}
+}
+
+───── ./Core/Behavior.bf ─────
+using System;
+
+namespace WordUI;
+
+// Event handler attached to a widget: carries a delegate the runtime invokes
+// when an event (click, hover, focus, etc.) fires. Behaviors have no Measure,
+// Draw*, or other pipeline hooks. They participate only in Describe (tree dump)
+// and are iterated by the input system during event dispatch.
+public abstract class Behavior
+{
+	// Contributes this behavior's detail to the tree dump. Append nothing to
+	// stay silent (e.g. when all fields hold default values).
+	public virtual void Describe(String buf) {}
+}
+
+───── ./Core/App.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// Rebuild-on-invalidate driver: `Build()` re-runs only after `Invalidate()`,
+// producing a fresh widget tree in a bump arena; the previous tree (widgets,
+// components, string copies) is freed wholesale by deleting the arena.
+//
+// The retained Node tree lives on the heap and survives rebuilds. After each
+// build, ReconcileTree() matches Widget descriptions (by StableKey) against
+// existing Nodes: matched Nodes are reused and their state (hover, press,
+// scroll, animations) persists; new Nodes are created; orphaned Nodes are
+// disposed.
+//
+// Non-core conveniences (e.g. DumpTree) live in Diagnostics/ as extensions
+// of this class.
+public abstract class App
+{
+	// The active App instance; set by SDLApp constructor, used by trackers
+	// and other infrastructure that need to trigger rebuilds.
+	public static App Instance;
+
+	BumpAllocator mArena ~ delete _;
+	// Owns event handlers (click, drag, …) the user allocates with `new`; freed
+	// wholesale on the next rebuild. Delegate is the common base of every handler
+	// signature (ClickHandler, DragHandler).
+	List<Delegate> mHandlers = new .() ~ { ClearHandlers(); delete _; };
+	Widget mRoot;
+	bool mDirty = true;
+	bool mNeedsRepaint = false;
+
+	// ---- Retained runtime: the Node tree ----
+
+	// Root of the retained node tree. Nodes are heap-allocated and survive
+	// rebuilds; they carry identity, parent/child relationships, generic state
+	// storage, and per-node animation clocks.
+	Node mRootNode;
+
+	// O(1) StableKey → Node lookup so trackers and draw code can access
+	// persistent state without a tree walk.
+	Dictionary<int, Node> mNodeIndex = new .() ~ delete _;
+
+	// ---- Drag / pointer capture (per-pointer-session, not per-widget) ----
+
+	int mDragKey = 0;
+	float mDragDX, mDragDY;
+	float mDragLastX, mDragLastY;
+
+	// ---- Public accessors ----
+
+	protected Widget Root => mRoot;
+
+	public bool DragActive => mDragKey != 0;
+	public int DragKey => mDragKey;
+
+	protected abstract void Build();
+
+	// App-data changed: rebuild + layout + render on the next frame.
+	public void Invalidate() { mDirty = true; }
+
+	// Visual-only change (interaction state, animation tick): render without a
+	// rebuild. Cheap path — no arena teardown, no layout.
+	public void RequestRepaint() { mNeedsRepaint = true; }
+
+	public bool NeedsRepaint => mNeedsRepaint;
+	public void ClearRepaint() { mNeedsRepaint = false; }
+
+	// ---- Node lookup ----
+
+	// Returns the retained Node for a given StableKey, or null if none exists.
+	// O(1) via the index. Used by trackers and draw code to read/write
+	// persistent per-widget state.
+	public Node FindNode(int stableKey)
+	{
+		Node node;
+		mNodeIndex.TryGetValue(stableKey, out node);
+		return node;
+	}
+
+	// ---- Animation ticks ----
+
+	// Advances all animation clocks in the retained Node tree by the wall-clock
+	// delta since the last tick. Called once per frame from the event loop.
+	public void TickAll(int nowMs)
+	{
+		if (mRootNode != null)
+			mRootNode.Tick(nowMs);
+	}
+
+	// True while any animation clock in the retained tree is mid-transition,
+	// or a drag is active — drives the event loop to use a frame-clock timeout
+	// instead of blocking.
+	public bool NeedsTick
+	{
+		get
+		{
+			if (mDragKey != 0)
+				return true;
+			return mRootNode != null && mRootNode.NeedsTick;
+		}
+	}
+
+	// ---- Drag state ----
+
+	public void BeginDrag(int key, float x, float y)
+	{
+		mDragKey = key;
+		mDragDX = 0; mDragDY = 0;
+		mDragLastX = x; mDragLastY = y;
+	}
+
+	// Returns the incremental delta since the last motion.
+	public (float dx, float dy) UpdateDrag(float x, float y)
+	{
+		let dx = x - mDragLastX;
+		let dy = y - mDragLastY;
+		mDragDX += dx; mDragDY += dy;
+		mDragLastX = x; mDragLastY = y;
+		return (dx, dy);
+	}
+
+	public void EndDrag()
+	{
+		mDragKey = 0;
+		mDragDX = 0; mDragDY = 0;
+	}
+
+	// Accumulated offset for the widget currently being dragged (else zero).
+	public (float x, float y) DragOffset(int key) =>
+		(key == mDragKey) ? (mDragDX, mDragDY) : (0f, 0f);
+
+	// ---- Build lifecycle ----
+
+	// Returns true if a rebuild happened.
+	public bool RebuildIfNeeded()
+	{
+		if (!mDirty)
+			return false;
+
+		mRoot = null;
+		DeleteAndNullify!(mArena);   // frees the entire previous tree
+		ClearHandlers();
+		mArena = new BumpAllocator();
+
+		UI.BeginBuild(mArena, mHandlers);
+		Build();
+		mRoot = UI.EndBuild();
+
+		// Assign stable identity, collecting the live key set.
+		HashSet<int> live = scope .();
+		KeyAssign.Run(mRoot, live);
+
+		// Reconcile the retained Node tree against the new Widget tree:
+		// reuse matched Nodes, create new ones, dispose orphans.
+		ReconcileTree(mRoot, live);
+
+		mDirty = false;
+		return true;
+	}
+
+	// ---- Reconciliation ----
+
+	// Matches the freshly-built Widget tree against the existing retained Node
+	// tree by StableKey. Matched Nodes are reused (their persistent state
+	// survives); new Nodes are created and indexed; orphaned Nodes (in the index
+	// but not in the live set) are disposed and removed.
+	void ReconcileTree(Widget root, HashSet<int> live)
+	{
+		// Walk the Widget tree depth-first, building or reusing Nodes.
+		Node newRoot = ReconcileWidget(root, null, live);
+
+		// Dispose orphans: any Node in the index that wasn't seen this build.
+		List<int> orphanKeys = scope .();
+		for (let pair in mNodeIndex)
+		{
+			if (!live.Contains(pair.key))
+				orphanKeys.Add(pair.key);
+		}
+		for (let key in orphanKeys)
+		{
+			let node = mNodeIndex[key];
+			mNodeIndex.Remove(key);
+			node.Dispose();
+			delete node;
+		}
+
+		mRootNode = newRoot;
+	}
+
+	// Recursively reconciles one Widget to a retained Node. Returns the
+	// (possibly new, possibly reused) Node for this subtree.
+	Node ReconcileWidget(Widget w, Node parent, HashSet<int> live)
+	{
+		if (w == null)
+			return null;
+
+		Node node;
+		if (!mNodeIndex.TryGetValue(w.StableKey, out node))
+		{
+			// First time seeing this key: create a fresh Node.
+			node = new Node(w.StableKey);
+			mNodeIndex[w.StableKey] = node;
+		}
+
+		// Update parent/child links (the Widget tree structure may have changed).
+		node.Parent = parent;
+		node.Children.Clear();
+
+		// Recurse into children.
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				let childNode = ReconcileWidget(child, node, live);
+				if (childNode != null)
+					node.Children.Add(childNode);
+			}
+		}
+
+		return node;
+	}
+
+	void ClearHandlers()
+	{
+		for (let h in mHandlers)
+			delete h;
+		mHandlers.Clear();
+	}
+}
+
+───── ./Core/Color.bf ─────
+using System;
+
+namespace WordUI;
+
+public struct Color
+{
+	public uint8 R, G, B, A;
+
+	public this(uint8 r, uint8 g, uint8 b, uint8 a = 255)
+	{
+		R = r; G = g; B = b; A = a;
+	}
+
+	[Commutable]
+	public static bool operator==(Color a, Color b)
+	{
+		return a.R == b.R && a.G == b.G && a.B == b.B && a.A == b.A;
+	}
+
+	public static readonly Color Black = .(0, 0, 0);
+	public static readonly Color White = .(255, 255, 255);
+	public static readonly Color Red = .(255, 0, 0);
+	public static readonly Color Green = .(0, 255, 0);
+	public static readonly Color Blue = .(0, 0, 255);
+
+	// Component-wise linear interpolation. t is clamped to [0,1] by the caller
+	// (the easing curve already maps into that range). Used by the draw-time
+	// resolver to blend a base color toward an animated target.
+	public static Color Lerp(Color a, Color b, float t)
+	{
+		uint8 lerp(uint8 x, uint8 y)
+		{
+			return (uint8)(x + (int)((y - x) * t));
+		}
+		return .(lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B), lerp(a.A, b.A));
+	}
+
+	public override void ToString(String buf)
+	{
+		buf.AppendF("#{:X2}{:X2}{:X2}{:X2}", R, G, B, A);
+	}
+}
+
+───── ./Core/DragTracker.bf ─────
+using System;
+
+namespace WordUI;
+
+// Drag capture and delta dispatch. On press over a draggable widget it begins a
+// capture on App (keyed by StableKey); while captured, all motion routes to that
+// widget's OnDrag handler regardless of what the pointer is over (this is the
+// pointer-capture behavior positional interactions need). The visual follows via
+// a render-time offset applied in SDLApp.DrawWidget — no relayout, no rebuild.
+// Live reflow is a later phase behind the same tracker.
+//
+// Drag state (key, accumulated offset, last position) lives directly on App
+// since it's per-pointer-session, not per-widget.
+static class DragTracker
+{
+	// Returns true if a drag started (so press handling can be skipped).
+	public static bool HandleDown(Widget root, float x, float y)
+	{
+		let hit = HitTest.At(root, x, y);
+		let b = hit?.GetBehavior<OnDragBehavior>();
+		if (b == null || b.Handler == null)
+			return false;
+
+		App.Instance.BeginDrag(hit.StableKey, x, y);
+		App.Instance.RequestRepaint();
+		return true;
+	}
+
+	public static void HandleMotion(Widget root, float x, float y)
+	{
+		let app = App.Instance;
+		if (!app.DragActive)
+			return;
+
+		let (dx, dy) = app.UpdateDrag(x, y);
+		let w = FindByKey(root, app.DragKey);
+		let b = w?.GetBehavior<OnDragBehavior>();
+		if (b != null && b.Handler != null)
+			b.Handler(dx, dy);
+		app.RequestRepaint();
+	}
+
+	public static void HandleUp()
+	{
+		let app = App.Instance;
+		if (!app.DragActive)
+			return;
+		app.EndDrag();
+		app.RequestRepaint();
+	}
+
+	static Widget FindByKey(Widget w, int key)
+	{
+		if (w == null)
+			return null;
+		if (w.StableKey == key)
+			return w;
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				let found = FindByKey(child, key);
+				if (found != null)
+					return found;
+			}
+		}
+		return null;
+	}
+}
+
+───── ./Core/Easing.bf ─────
+using System;
+
+namespace WordUI;
+
+// Time-warp curves for animation. An easing maps normalized progress p in
+// [0,1] (linear time) to eased progress, also in [0,1]. The resolver feeds the
+// eased value to Lerp. Curves live here so both Transition words and the
+// resolver share one definition; user code can add cases via the enum + Apply.
+public enum Easing
+{
+	case Linear;
+	case EaseInOut;
+	case Spring;
+
+	// Maps linear progress p (already clamped to [0,1]) to eased progress.
+	public float Apply(float p)
+	{
+		switch (this)
+		{
+		case .Linear:
+			return p;
+		case .EaseInOut:
+			// smoothstep: 3p^2 - 2p^3
+			return p * p * (3f - 2f * p);
+		case .Spring:
+			// Lightly overshooting settle; still lands on 1 at p==1.
+			let s = 1.70158f;
+			let x = p - 1f;
+			return 1f + (s + 1f) * x * x * x + s * x * x;
+		}
+	}
+}
+
+// Scalar linear interpolation shared by the resolver for float channels
+// (FontSize, StrokeWidth, Radius, drag offsets).
+static class Lerp
+{
+	public static float F(float a, float b, float t) => a + (b - a) * t;
+}
+
+───── ./Core/HoverTracker.bf ─────
+using System;
+
+namespace WordUI;
+
+// Hover tracking, keyed by StableKey. On pointer motion it hit-tests the tree
+// and, when the hovered widget changes, updates the retained Node state and
+// requests a repaint (never a rebuild). Because hover is resolved at draw,
+// entering and leaving a widget cannot flicker and cannot spike CPU with
+// per-motion rebuilds.
+//
+// Slot 1: hover bool — set on the retained Node for the hovered widget.
+static class HoverTracker
+{
+	public const int SlotHover = 1;
+
+	static int sHoveredKey = 0;
+
+	public static void HandleMotion(Widget root, float x, float y)
+	{
+		let app = App.Instance;
+		let hit = HitTest.At(root, x, y);
+		let key = hit != null ? hit.StableKey : 0;
+		if (key == sHoveredKey)
+			return;
+
+		// Clear previous hover.
+		if (sHoveredKey != 0)
+		{
+			let prev = app.FindNode(sHoveredKey);
+			prev?.SetBool(SlotHover, false);
+		}
+
+		// Set new hover.
+		if (key != 0)
+		{
+			let node = app.FindNode(key);
+			node?.SetBool(SlotHover, true);
+		}
+
+		sHoveredKey = key;
+		app.RequestRepaint();
+	}
+}
+
+───── ./Core/InputEvent.bf ─────
+using System;
+
+namespace WordUI;
+
+// Adapted SDL event at the framework boundary: SDL types never cross into
+// hit-testing, dispatch, or any tracker.
+public struct InputEvent
+{
+	public enum Kind
+	{
+		MouseDown,
+		MouseUp,
+		MouseMotion,
+		MouseWheel
+	}
+
+	public Kind Type;
+	public float X, Y;          // pointer position in window coords
+	public float WheelX, WheelY; // scroll amounts (MouseWheel only)
+}
+
+───── ./Core/Interaction.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// Patch-recording core for Option A. A state body (IfActive / IfHover / ...)
+// always runs at build, but its styling words don't mutate base components —
+// they record a field-level StatePatch onto the widget's InteractionStyle. The
+// draw-time resolver later blends active patches over the base values.
+extension UI
+{
+	// Active recording target. Non-null only while a state body runs.
+	[ThreadStatic] static StatePatch sPatch;
+	[ThreadStatic] static bool sPatchAnim;   // true inside a Transition() block
+
+	public static bool InPatch => sPatch != null;
+
+	// ---- Generic conditional (the user-extensible primitive) ----
+
+	// Always runs body, recording a patch tagged with state T. Whether the patch
+	// applies (and how strongly, when animated) is decided at draw by
+	// T.IsActiveFor(widget.StableKey) against the retained Node tree.
+	public static void IfActive<T>(delegate void() body)
+		where T : Property, IInteractionState
+	{
+		let w = Top("IfActive");
+		var s = w.GetProperty<T>();
+		if (s == null)
+		{
+			s = new:BuildAlloc T();
+			w.AttachProperty(s);
+		}
+
+		let prevPatch = sPatch;
+		let prevAnim = sPatchAnim;
+		sPatch = new:BuildAlloc StatePatch();
+		sPatchAnim = false;
+
+		body();
+
+		RecordPatch(w, s, sPatch);
+		sPatch = prevPatch;
+		sPatchAnim = prevAnim;
+	}
+
+	// ---- Animation ----
+
+	// Marks the fields recorded inside body as animated with the given duration
+	// (and curve). Outside a state body it is a transparent pass-through.
+	public static void Transition(int ms, delegate void() body)
+	{
+		Transition(ms, .EaseInOut, body);
+	}
+
+	public static void Transition(int ms, Easing curve, delegate void() body)
+	{
+		if (sPatch == null) { body(); return; }
+		let prevAnim = sPatchAnim;
+		sPatchAnim = true;
+		sPatch.DurationMs = ms;
+		sPatch.Curve = curve;
+		body();
+		sPatchAnim = prevAnim;
+	}
+
+	// ---- Record helpers (called by styling words when InPatch) ----
+	// Each returns true when it consumed the value, so the word early-returns
+	// instead of running its normal base-mutation path.
+
+	public static bool RecordFill(Color c)
+	{
+		if (sPatch == null) return false;
+		sPatch.HasFill = true; sPatch.Fill = c; sPatch.FillAnim = sPatchAnim;
+		return true;
+	}
+
+	public static bool RecordStroke(Color c)
+	{
+		if (sPatch == null) return false;
+		sPatch.HasStroke = true; sPatch.Stroke = c; sPatch.StrokeAnim = sPatchAnim;
+		return true;
+	}
+
+	public static bool RecordStrokeWidth(float w)
+	{
+		if (sPatch == null) return false;
+		sPatch.HasStrokeWidth = true; sPatch.StrokeWidth = w; sPatch.StrokeWidthAnim = sPatchAnim;
+		return true;
+	}
+
+	public static bool RecordTextColor(Color c)
+	{
+		if (sPatch == null) return false;
+		sPatch.HasTextColor = true; sPatch.TextColor = c; sPatch.TextColorAnim = sPatchAnim;
+		return true;
+	}
+
+	public static bool RecordFontSize(float px)
+	{
+		if (sPatch == null) return false;
+		sPatch.HasFontSize = true; sPatch.FontSize = px; sPatch.FontSizeAnim = sPatchAnim;
+		return true;
+	}
+
+	static void RecordPatch(Widget w, IInteractionState state, StatePatch patch)
+	{
+		var style = w.GetProperty<InteractionStyle>();
+		if (style == null)
+		{
+			style = new:BuildAlloc InteractionStyle();
+			style.Records = new:BuildAlloc List<PatchRecord>();
+			w.AttachProperty(style);
+		}
+		style.Records.Add(.() { State = state, Patch = patch });
+	}
+}
+
+───── ./Core/KeyAssign.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// Assigns Widget.StableKey by a deterministic walk of the finished tree, so the
+// same logical widget gets the same key across rebuilds (as long as the build
+// structure is stable). This is the identity persistent interaction state keys
+// off of — it replaces the old dangling Widget* / positional build ordinal.
+//
+// Each widget's key is a path hash: hash(parentKey, Name, discriminator), where
+// the discriminator is the author's Key() hint when set (>= 0, e.g. list item
+// index) or the sibling ordinal otherwise. Feeding the explicit hint into the
+// hash (rather than using it raw) keeps user keys and auto keys in one space
+// with no collisions between a small user int and a computed path.
+static class KeyAssign
+{
+	// When `liveKeys` is provided, every assigned StableKey is added to it, so the
+	// caller can evict store entries for keys absent from this build.
+	public static void Run(Widget root, HashSet<int> liveKeys = null)
+	{
+		if (root != null)
+			Assign(root, 1, 0, liveKeys);
+	}
+
+	static void Assign(Widget w, int parentKey, int siblingIndex, HashSet<int> live)
+	{
+		int disc = w.Key >= 0 ? w.Key : siblingIndex;
+		w.StableKey = Mix(Mix(parentKey, HashName(w.Name)), disc);
+		if (live != null)
+			live.Add(w.StableKey);
+
+		let children = w.GetComponent<Children>();
+		if (children == null)
+			return;
+		for (int i = 0; i < children.Items.Count; i++)
+			Assign(children.Items[i], w.StableKey, i, live);
+	}
+
+	// FNV-1a over the name bytes; stable and allocation-free.
+	static int HashName(StringView name)
+	{
+		int h = (int)0xcbf29ce484222325UL;
+		for (let c in name)
+			h = (h ^ (int)c) &* (int)0x100000001b3UL;
+		return h;
+	}
+
+	static int Mix(int a, int b)
+	{
+		int h = a &* (int)0x100000001b3UL;
+		return h ^ b;
+	}
+}
+
+───── ./Core/Painter.bf ─────
+using System;
+using System.Collections;
+using SDL3;
+using SDL3_ttf;
+
+namespace WordUI;
+
+// Concrete drawing module over SDL_Renderer + SDL3_ttf. All SDL drawing
+// calls are localized here — no SDL types leak into the framework.
+// Plain class, no interface: the abstraction is extracted later once the
+// SDL3 model is proven.
+public class Painter
+{
+	SDL_Renderer* mRenderer;
+	TTF_Font* mFont;
+
+	// SDL keeps only one clip rect; we maintain the stack and intersection so
+	// nested clip regions (a scroll view inside another) compose correctly.
+	List<SDL_Rect> mClipStack = new .() ~ delete _;
+
+	public this(SDL_Renderer* renderer, TTF_Font* font)
+	{
+		mRenderer = renderer;
+		mFont = font;
+	}
+
+	public TTF_Font* Font => mFont;
+	public SDL_Renderer* Renderer => mRenderer;
+
+	// ---- Clipping ----
+
+	// Restrict subsequent drawing to `rect` intersected with any enclosing clip.
+	// Pair every PushClip with a PopClip.
+	public void PushClip(Rect rect)
+	{
+		SDL_Rect r = ToSdlRect(rect);
+		if (mClipStack.Count > 0)
+			r = Intersect(r, mClipStack[mClipStack.Count - 1]);
+		mClipStack.Add(r);
+		SDL_SetRenderClipRect(mRenderer, &r);
+	}
+
+	public void PopClip()
+	{
+		if (mClipStack.Count == 0)
+			return;
+		mClipStack.RemoveAt(mClipStack.Count - 1);
+		if (mClipStack.Count == 0)
+		{
+			SDL_SetRenderClipRect(mRenderer, null);
+		}
+		else
+		{
+			SDL_Rect top = mClipStack[mClipStack.Count - 1];
+			SDL_SetRenderClipRect(mRenderer, &top);
+		}
+	}
+
+	// Float Rect -> integer SDL_Rect: floor the origin and ceil the far edges so
+	// the integer box never clips away a partially covered pixel.
+	static SDL_Rect ToSdlRect(Rect rect)
+	{
+		int32 x0 = (int32)Math.Floor(rect.X);
+		int32 y0 = (int32)Math.Floor(rect.Y);
+		int32 x1 = (int32)Math.Ceiling(rect.Right);
+		int32 y1 = (int32)Math.Ceiling(rect.Bottom);
+		return .() { x = x0, y = y0, w = x1 - x0, h = y1 - y0 };
+	}
+
+	static SDL_Rect Intersect(SDL_Rect a, SDL_Rect b)
+	{
+		int32 x0 = Math.Max(a.x, b.x);
+		int32 y0 = Math.Max(a.y, b.y);
+		int32 x1 = Math.Min(a.x + a.w, b.x + b.w);
+		int32 y1 = Math.Min(a.y + a.h, b.y + b.h);
+		return .() { x = x0, y = y0, w = Math.Max(0, x1 - x0), h = Math.Max(0, y1 - y0) };
+	}
+
+	// Fill a rectangle with a solid color.
+	public void FillRect(Rect rect, Color color)
+	{
+		SDL_SetRenderDrawColor(mRenderer, color.R, color.G, color.B, color.A);
+		SDL_FRect r = .() { x = rect.X, y = rect.Y, w = rect.Width, h = rect.Height };
+		SDL_RenderFillRect(mRenderer, &r);
+	}
+
+	// Fill a rounded rectangle. TODO: use SDL_RenderFillRoundedRect when the
+	// Beef SDL3 bindings expose it.
+	public void FillRoundRect(Rect rect, float radius, Color color)
+	{
+		FillRect(rect, color);
+	}
+
+	// Stroke a rectangle outline with a solid color.
+	public void DrawRect(Rect rect, Color color)
+	{
+		SDL_SetRenderDrawColor(mRenderer, color.R, color.G, color.B, color.A);
+		SDL_FRect r = .() { x = rect.X, y = rect.Y, w = rect.Width, h = rect.Height };
+		SDL_RenderRect(mRenderer, &r);
+	}
+
+	// Stroke a rounded rectangle outline. TODO: use SDL_RenderRoundedRect when
+	// the Beef SDL3 bindings expose it.
+	public void DrawRoundRect(Rect rect, float radius, float width, Color color)
+	{
+		DrawRect(rect, color);
+	}
+
+	// Render text at a position with the given color.
+	public void DrawText(StringView text, float x, float y, Color color)
+	{
+		let cStr = text.ToScopeCStr!();
+		let sdlColor = SDL_Color() { r = color.R, g = color.G, b = color.B, a = color.A };
+		let surface = TTF_RenderText_Blended(mFont, cStr, 0, sdlColor);
+		if (surface == null)
+			return;
+		defer SDL_DestroySurface(surface);
+
+		let texture = SDL_CreateTextureFromSurface(mRenderer, surface);
+		if (texture == null)
+			return;
+		defer SDL_DestroyTexture(texture);
+
+		SDL_FRect dst = .() { x = x, y = y, w = (float)surface.w, h = (float)surface.h };
+		SDL_RenderTexture(mRenderer, texture, null, &dst);
+	}
+
+	// Measure text dimensions at the current font size.
+	public Size MeasureText(StringView text)
+	{
+		let cStr = text.ToScopeCStr!();
+		int32 w = 0, h = 0;
+		TTF_GetStringSize(mFont, cStr, 0, &w, &h);
+		return .((float)w, (float)h);
+	}
+}
+
+───── ./Core/PressTracker.bf ─────
+using System;
+
+namespace WordUI;
+
+// Press/click dispatch, keyed by StableKey in the retained Node tree.
+// Storing a key (not a Widget*) is what fixes the missed/delayed clicks: the
+// key stays valid across the arena teardown a rebuild performs, so a down in
+// one frame and an up several frames (and rebuilds) later still match.
+//
+// Press no longer triggers a rebuild — it sets Node state and requests a
+// repaint, so IfPressed feedback resolves at draw with no tree teardown.
+//
+// Slot 2: press bool — set on the retained Node for the pressed widget.
+static class PressTracker
+{
+	public const int SlotPress = 2;
+
+	static int sPressedKey = 0;   // 0 = nothing pressed
+	static bool sPressedClickable;
+
+	public static bool HandleEvent(Widget root, InputEvent event)
+	{
+		let app = App.Instance;
+
+		if (event.Type == .MouseDown)
+		{
+			let hit = HitTest.At(root, event.X, event.Y);
+			if (hit == null)
+			{
+				sPressedKey = 0;
+				return false;
+			}
+			sPressedKey = hit.StableKey;
+			sPressedClickable = hit.GetBehavior<OnClickBehavior>()?.Handler != null;
+			let node = app.FindNode(sPressedKey);
+			node?.SetBool(SlotPress, true);
+			app.RequestRepaint();
+			return false;
+		}
+
+		if (event.Type == .MouseUp)
+		{
+			if (sPressedKey == 0)
+				return false;
+
+			let pressedNode = app.FindNode(sPressedKey);
+			pressedNode?.SetBool(SlotPress, false);
+			app.RequestRepaint();
+
+			let released = HitTest.At(root, event.X, event.Y);
+			bool fired = false;
+			if (sPressedClickable && released != null && released.StableKey == sPressedKey)
+			{
+				let clickable = released.GetBehavior<OnClickBehavior>();
+				if (clickable != null && clickable.Handler != null)
+				{
+					clickable.Handler();   // may Invalidate() for app-data changes
+					fired = true;
+				}
+			}
+			sPressedKey = 0;
+			return fired;
+		}
+
+		return false;
+	}
+}
+
+───── ./Core/SDLApp.bf ─────
+using System;
+using SDL3;
+using SDL3_ttf;
+
+namespace WordUI;
+
+// SDL3-backed App: manages a window + renderer lifecycle, font loading,
+// layout pass, and rendering. Subclasses override Build() (from App) to
+// define the widget tree.
+public abstract class SDLApp : App
+{
+	SDL_Window* mWindow;
+	SDL_Renderer* mRenderer;
+	String mTitle = new .("WordUI") ~ delete _;
+	int32 mWidth = 1024;
+	int32 mHeight = 768;
+	Color mClearColor = .(30, 30, 30, 255);
+	TTF_Font* mDefaultFont;
+	Painter mPainter ~ delete _;
+
+	public this()
+	{
+		App.Instance = this;
+		SDL_Init(.SDL_INIT_VIDEO);
+		TTF_Init();
+		SDL_CreateWindowAndRenderer(
+			mTitle,
+			mWidth,
+			mHeight,
+			0,
+			&mWindow,
+			&mRenderer
+		);
+		mDefaultFont = TTF_OpenFont(
+			"assets/fonts/Funnel_Sans/FunnelSans-Regular.ttf",
+			16
+		);
+		mPainter = new Painter(mRenderer, mDefaultFont);
+		sDefaultFont = mDefaultFont;
+	}
+
+	public static TTF_Font* sDefaultFont;
+
+	public ~this()
+	{
+		if (mDefaultFont != null)
+			TTF_CloseFont(mDefaultFont);
+		if (mRenderer != null)
+			SDL_DestroyRenderer(mRenderer);
+		if (mWindow != null)
+			SDL_DestroyWindow(mWindow);
+		sDefaultFont = null;
+		TTF_Quit();
+		SDL_Quit();
+	}
+
+	public int32 Width => mWidth;
+	public int32 Height => mHeight;
+	public SDL_Renderer* Renderer => mRenderer;
+	public TTF_Font* DefaultFont => mDefaultFont;
+	public Color ClearColor { get => mClearColor; set => mClearColor = value; }
+
+	// Called each frame after the clear. Default walks the widget tree
+	// and draws each widget at its layout rect.
+	private void Draw()
+	{
+		DrawWidget(Root, 0, 0);
+	}
+
+	// (ox,oy) is the accumulated render-time offset from an ancestor drag. When
+	// this widget is the one being dragged, its own offset is added and inherited
+	// by its subtree — the visual follows the pointer without any relayout.
+	void DrawWidget(Widget w, float ox, float oy)
+	{
+		if (w == null)
+			return;
+
+		let app = App.Instance;
+
+		var ox, oy;
+		if (app.DragActive && w.StableKey == app.DragKey)
+		{
+			let (dx, dy) = app.DragOffset(w.StableKey);
+			ox += dx; oy += dy;
+		}
+
+		Rect bounds = .(w.mRect.X + ox, w.mRect.Y + oy, w.mRect.Width, w.mRect.Height);
+
+		// 1. Background — fills behind everything (Interior)
+		for (let c in w.Components)
+			c.DrawBackground(mPainter, w, bounds);
+
+		// 2. Content — widget's own content (TextStyle, custom drawing)
+		for (let c in w.Components)
+			c.DrawContent(mPainter, w, bounds);
+
+		// 3. Children — recurse, optionally clipped to this widget's box and
+		// translated by its persistent scroll offset (same render-time offset
+		// mechanism as drag, folded into a private childOx/childOy).
+		var childOx = ox, childOy = oy;
+
+		bool clip = w.GetComponent<ClipRegion>() != null;
+		if (clip)
+			mPainter.PushClip(bounds);
+
+		if (w.GetComponent<ScrollView>() != null)
+		{
+			let node = app.FindNode(w.StableKey);
+			let off = node != null ? node.GetFloat(ScrollTracker.SlotScroll) : 0f;
+			let stack = w.GetComponent<StackLayout>();
+			if (stack == null || stack.Axis == .Vertical)
+				childOy -= off;
+			else
+				childOx -= off;
+		}
+
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+				DrawWidget(child, childOx, childOy);
+		}
+
+		if (clip)
+			mPainter.PopClip();
+
+		// 4. Overlay — strokes on top of content and children (Boundary),
+		// unclipped so a container's own border draws around its full box.
+		for (let c in w.Components)
+			c.DrawOverlay(mPainter, w, bounds);
+	}
+
+	// Enter the event loop. Returns when the window is closed.
+	//
+	// Frame-batched and event-driven: when nothing is animating or dragging the
+	// loop BLOCKS in SDL_WaitEvent (true zero idle CPU); while a transition or
+	// drag is in flight it uses a ~16ms timeout as a frame clock. After each wake
+	// it drains all pending events (coalescing motion), advances animation
+	// clocks, then rebuilds+lays-out only on mDirty, else repaints only.
+	public void Run()
+	{
+		RebuildIfNeeded();
+		Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
+		DumpTree();
+		Render();
+
+		bool quit = false;
+		SDL_Event event = .();
+		while (!quit)
+		{
+			// Block when idle; tick at ~60fps while animating/dragging.
+			if (App.Instance.NeedsTick)
+			{
+				if (SDL_WaitEventTimeout(&event, 16))
+					HandleEvent(event, ref quit);
+			}
+			else if (SDL_WaitEvent(&event))
+			{
+				HandleEvent(event, ref quit);
+			}
+
+			// Drain the rest of the queue, coalescing motion to the last position.
+			bool hadMotion = false;
+			float motionX = 0, motionY = 0;
+			while (SDL_PollEvent(&event))
+			{
+				if (event.type == (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION)
+				{
+					hadMotion = true;
+					motionX = event.motion.x; motionY = event.motion.y;
+					continue;
+				}
+				HandleEvent(event, ref quit);
+			}
+			if (hadMotion)
+				HandleMotion(motionX, motionY);
+
+			// Advance animation clocks against wall-clock time.
+			App.Instance.TickAll((int)SDL_GetTicks());
+
+			if (RebuildIfNeeded())
+			{
+				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
+				Render();
+			}
+			else if (NeedsRepaint || App.Instance.NeedsTick)
+			{
+				Render();
+				ClearRepaint();
+			}
+		}
+	}
+
+	void HandleEvent(SDL_Event event, ref bool quit)
+	{
+		switch (event.type)
+		{
+		case (uint32)SDL_EventType.SDL_EVENT_QUIT:
+			quit = true;
+		case (uint32)SDL_EventType.SDL_EVENT_WINDOW_RESIZED:
+			mWidth = (int32)event.window.data1;
+			mHeight = (int32)event.window.data2;
+			Invalidate();
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_MOTION:
+			HandleMotion(event.motion.x, event.motion.y);
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
+			InputEvent wheel = .() {
+				Type = .MouseWheel,
+				X = event.wheel.mouse_x, Y = event.wheel.mouse_y,
+				WheelX = event.wheel.x, WheelY = event.wheel.y
+			};
+			ScrollTracker.HandleWheel(Root, wheel);
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_DOWN:
+			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+			{
+				if (!DragTracker.HandleDown(Root, event.button.x, event.button.y))
+				{
+					InputEvent input = .() { Type = .MouseDown, X = event.button.x, Y = event.button.y };
+					PressTracker.HandleEvent(Root, input);
+				}
+			}
+		case (uint32)SDL_EventType.SDL_EVENT_MOUSE_BUTTON_UP:
+			if (event.button.button == (uint8)SDL_MouseButtonFlags.SDL_BUTTON_LEFT)
+			{
+				if (App.Instance.DragActive)
+					DragTracker.HandleUp();
+				InputEvent input = .() { Type = .MouseUp, X = event.button.x, Y = event.button.y };
+				PressTracker.HandleEvent(Root, input);
+			}
+		default:
+		}
+	}
+
+	// A drag capture takes precedence over hover updates while it is active.
+	void HandleMotion(float x, float y)
+	{
+		if (App.Instance.DragActive)
+			DragTracker.HandleMotion(Root, x, y);
+		else
+			HoverTracker.HandleMotion(Root, x, y);
+	}
+
+	private void Render()
+	{
+		SDL_SetRenderDrawColor(
+			mRenderer,
+			mClearColor.R,
+			mClearColor.G,
+			mClearColor.B,
+			mClearColor.A
+		);
+		SDL_RenderClear(mRenderer);
+		Draw();
+		SDL_RenderPresent(mRenderer);
+	}
+}
+
+───── ./Core/ScrollTracker.bf ─────
+using System;
+
+namespace WordUI;
+
+// Wheel dispatch. Unlike drag there is no capture: each wheel event is a discrete
+// impulse. HandleWheel finds the scrollable under the pointer, adjusts its
+// persistent offset in the retained Node (clamped to the content extent), and
+// requests a repaint — no rebuild, mirroring the drag/press cheap path. The
+// offset is applied at draw time in SDLApp.DrawWidget.
+//
+// Slot 3: scroll offset float — stored on the retained Node.
+static class ScrollTracker
+{
+	public const int SlotScroll = 3;
+
+	// Pixels of scroll per wheel notch.
+	const float StepPx = 30f;
+
+	public static void HandleWheel(Widget root, InputEvent event)
+	{
+		let hit = FindScrollableAt(root, event.X, event.Y);
+		if (hit == null)
+			return;
+
+		let stack = hit.GetComponent<StackLayout>();
+		bool vertical = stack == null || stack.Axis == .Vertical;
+
+		// Viewport = the container's own inner box (its allocated rect minus
+		// padding). Content extent = how far the children reach past the inner
+		// origin (they are laid out at natural, unclamped positions and overflow).
+		float pad = hit.Padding;
+		float viewportMain = (vertical ? hit.mRect.Height : hit.mRect.Width) - 2 * pad;
+		float innerOrigin = (vertical ? hit.mRect.Y : hit.mRect.X) + pad;
+
+		float contentEnd = innerOrigin;
+		let children = hit.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				let edge = vertical ? child.mRect.Bottom : child.mRect.Right;
+				contentEnd = Math.Max(contentEnd, edge);
+			}
+		}
+		float maxOffset = Math.Max(0, (contentEnd - innerOrigin) - viewportMain);
+
+		let app = App.Instance;
+		let node = app.FindNode(hit.StableKey);
+		let current = node != null ? node.GetFloat(SlotScroll) : 0f;
+
+		// SDL wheel y is positive away from the user; scrolling away reveals
+		// earlier content, i.e. a smaller offset.
+		float next = Math.Clamp(current - event.WheelY * StepPx, 0, maxOffset);
+		if (node != null)
+			node.SetFloat(SlotScroll, next);
+
+		let b = hit.GetBehavior<OnScrollBehavior>();
+		if (b != null && b.Handler != null)
+			b.Handler(next);
+
+		app.RequestRepaint();
+	}
+
+	// Deepest widget carrying a ScrollView whose rect contains the point. Because
+	// a scroll container's rect encloses its viewport (and therefore the pointer),
+	// a wheel over a child resolves to the enclosing scrollable — bubbling without
+	// a parent pointer.
+	static Widget FindScrollableAt(Widget root, float x, float y)
+	{
+		return Find(root, x, y, null);
+	}
+
+	static Widget Find(Widget w, float x, float y, Widget best)
+	{
+		if (w == null)
+			return best;
+
+		Widget current = best;
+		if (x >= w.mRect.X && x < w.mRect.Right &&
+			y >= w.mRect.Y && y < w.mRect.Bottom &&
+			w.GetComponent<ScrollView>() != null)
+		{
+			current = w;
+		}
+
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+				current = Find(child, x, y, current);
+		}
+		return current;
+	}
+}
+
+───── ./Core/StyleResolve.bf ─────
+using System;
+
+namespace WordUI;
+
+// Draw-time style resolution. Drawing components call these with their base
+// value; the resolver blends every active (or still-animating) patch over it,
+// field by field, so concurrent states compose. Animated fields interpolate via
+// the persistent clock in the retained Node tree, which is what lets a transition
+// survive a rebuild and keep the frame loop ticking.
+enum ColorField { Fill, Stroke, TextColor }
+enum FloatField { FontSize, StrokeWidth }
+
+static class StyleResolve
+{
+	public static Color Color(Widget w, Color baseValue, ColorField field)
+	{
+		let style = w.GetProperty<InteractionStyle>();
+		if (style == null || style.Records == null)
+			return baseValue;
+
+		Color result = baseValue;
+		for (let rec in style.Records)
+		{
+			if (!HasColor(rec.Patch, field, let target, let anim))
+				continue;
+			let factor = Factor(w, rec, anim);
+			if (factor <= 0f)
+				continue;
+			result = WordUI.Color.Lerp(result, target, factor);
+		}
+		return result;
+	}
+
+	public static float Float(Widget w, float baseValue, FloatField field)
+	{
+		let style = w.GetProperty<InteractionStyle>();
+		if (style == null || style.Records == null)
+			return baseValue;
+
+		float result = baseValue;
+		for (let rec in style.Records)
+		{
+			if (!HasFloat(rec.Patch, field, let target, let anim))
+				continue;
+			let factor = Factor(w, rec, anim);
+			if (factor <= 0f)
+				continue;
+			result = Lerp.F(result, target, factor);
+		}
+		return result;
+	}
+
+	// Blend strength for one record: 1/0 instantly for non-animated fields,
+	// or the eased clock value for animated ones (which also advances/keeps the
+	// loop alive while settling).
+	static float Factor(Widget w, PatchRecord rec, bool anim)
+	{
+		let active = rec.State.IsActiveFor(w.StableKey);
+		if (!anim)
+			return active ? 1f : 0f;
+		let node = App.Instance.FindNode(w.StableKey);
+		return node != null
+			? node.Blend(rec.State.StateId, active, rec.Patch.DurationMs, rec.Patch.Curve)
+			: 0f;
+	}
+
+	static bool HasColor(StatePatch p, ColorField field, out Color value, out bool anim)
+	{
+		switch (field)
+		{
+		case .Fill:      value = p.Fill;      anim = p.FillAnim;      return p.HasFill;
+		case .Stroke:    value = p.Stroke;    anim = p.StrokeAnim;    return p.HasStroke;
+		case .TextColor: value = p.TextColor; anim = p.TextColorAnim; return p.HasTextColor;
+		}
+	}
+
+	static bool HasFloat(StatePatch p, FloatField field, out float value, out bool anim)
+	{
+		switch (field)
+		{
+		case .FontSize:    value = p.FontSize;    anim = p.FontSizeAnim;    return p.HasFontSize;
+		case .StrokeWidth: value = p.StrokeWidth; anim = p.StrokeWidthAnim; return p.HasStrokeWidth;
+		}
+	}
+}
+
+───── ./Core/UI.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// The core-op API every word is built from. Framework words live in extension
+// UI blocks (one file per concern under Widgets/, Modifiers/, Handlers/); app
+// developers add their own words the same way, in their own project.
+//
+// Word-author conventions (see DESIGN.md):
+//  - Modifiers act on the current stack top (widget or closed container).
+//  - Construction is stack-based: pop your inputs FIRST, then NewWidget(),
+//    then AttachComponent()/modifier words. NewWidget also returns the widget for
+//    authors preferring the applicative style.
+//  - The stack is a per-thread construction workspace, empty between builds.
+public static class UI
+{
+	[ThreadStatic]
+	static List<StackItem> sStack;
+
+	static List<Delegate> sHandlers;
+
+	// The build arena: everything a word allocates (widgets, components,
+	// strings) goes through `new:BuildAlloc` and dies wholesale on rebuild.
+	// Valid only between BeginBuild and EndBuild.
+	public static BumpAllocator BuildAlloc;
+
+	static ~this()
+	{
+		delete sStack;   // main thread only; the prototype is single-threaded
+	}
+
+	static List<StackItem> Stack
+	{
+		get
+		{
+			if (sStack == null)
+				sStack = new .();
+			return sStack;
+		}
+	}
+
+	// ---- Build lifecycle (called by App, not by word code) ----
+
+	public static void BeginBuild(BumpAllocator arena, List<Delegate> handlers)
+	{
+		Runtime.Assert(BuildAlloc == null, "BeginBuild called while another build is active");
+		BuildAlloc = arena;
+		sHandlers = handlers;
+		if (!Stack.IsEmpty)
+			Fail("BeginBuild", "stack not empty at start of build — a previous build leaked items");
+	}
+
+	public static Widget EndBuild()
+	{
+		BuildAlloc = null;
+		sHandlers = null;
+		if (Stack.Count != 1)
+			Fail("EndBuild", scope $"expected exactly 1 root widget on the stack, found {Stack.Count} items");
+		return PopWidget("EndBuild");
+	}
+
+	// ---- Stack core ops ----
+
+	public static void Push(StackItem item)
+	{
+		Stack.Add(item);
+	}
+
+	public static String PopStr(StringView word)
+	{
+		if (Pop(word) case .Str(let s))
+			return s;
+		FailPopped(word, "a string");
+	}
+
+	public static int PopInt(StringView word)
+	{
+		if (Pop(word) case .Int(let v))
+			return v;
+		FailPopped(word, "an int");
+	}
+
+	public static float PopFloat(StringView word)
+	{
+		if (Pop(word) case .Float(let v))
+			return v;
+		FailPopped(word, "a float");
+	}
+
+	public static double PopDouble(StringView word)
+	{
+		if (Pop(word) case .Double(let v))
+			return v;
+		FailPopped(word, "a double");
+	}
+
+	public static bool PopBool(StringView word)
+	{
+		if (Pop(word) case .Bool(let v))
+			return v;
+		FailPopped(word, "a bool");
+	}
+
+	public static Widget PopWidget(StringView word)
+	{
+		if (Pop(word) case .Elem(let w))
+			return w;
+		FailPopped(word, "a widget");
+	}
+
+	public static Component PopPen(StringView word)
+	{
+		if (Pop(word) case .Pen(let c))
+			return c;
+		FailPopped(word, "a pen component");
+	}
+
+	// The pen property modifiers act on; errors name the word that misfired.
+	public static Component TopPen(StringView word)
+	{
+		if (Stack.IsEmpty)
+			Fail(word, "stack is empty — pen modifiers must be inside a Background/Border block");
+		if (Stack.Back case .Pen(let c))
+			return c;
+		let s = scope String();
+		Stack.Back.ToString(s);
+		Fail(word, scope $"stack top is {s}, not a pen — pen modifiers must be inside a Background/Border block");
+	}
+
+	// Attaches a component to the stack-top widget, replacing any existing
+	// component of a compatible type (used by Interior_/Border_ etc.).
+	public static void ReplaceComponent(Component c)
+	{
+		Top("ReplaceComponent").ReplaceComponent(c);
+	}
+
+	// The widget modifiers act on; errors name the word that misfired.
+	public static Widget Top(StringView word)
+	{
+		if (Stack.IsEmpty)
+			Fail(word, "stack is empty — modifiers must follow a widget word");
+		if (Stack.Back case .Elem(let w))
+			return w;
+		let s = scope String();
+		Stack.Back.ToString(s);
+		Fail(word, scope $"stack top is {s}, not a widget — modifiers act on widgets");
+	}
+
+	// ---- Widget construction ops ----
+
+	// Pushes a fresh widget and returns it (return value is the applicative
+	// escape hatch; canonical word style ignores it).
+	public static Widget NewWidget(StringView name)
+	{
+		let w = new:BuildAlloc Widget(
+			name,
+			new:BuildAlloc List<Component>(),
+			new:BuildAlloc List<Property>(),
+			new:BuildAlloc List<Behavior>());
+		Stack.Add(.Elem(w));
+		return w;
+	}
+
+	// Component bag helpers
+	public static void AttachComponent(Component c)
+	{
+		Top("AttachComponent").AttachComponent(c);
+	}
+
+	public static void AttachProperty(Property p)
+	{
+		Top("AttachProperty").AttachProperty(p);
+	}
+
+	public static void AttachBehavior(Behavior b)
+	{
+		Top("AttachBehavior").AttachBehavior(b);
+	}
+
+	// ---- Pens (scoped block primitives, like containers) ----
+
+	// Pushes a pen component onto the stack. Used by _Interior / _Border.
+	public static void PushPen(Component pen)
+	{
+		Stack.Add(.Pen(pen));
+	}
+
+	// Pops the pen, finds and removes the matching marker, then returns the
+	// pen. The caller attaches it to the stack-top widget.
+	// Stack effect: ( ... marker widget pen -- ... widget )
+	public static Component ClosePen(StringView name)
+	{
+		let pen = PopPen(name);
+
+		int markerIdx = -1;
+		StringView openName = default;
+		for (int i = Stack.Count - 1; i >= 0; i--)
+		{
+			if (Stack[i] case .Mark(let n))
+			{
+				if (n == name)
+				{
+					markerIdx = i;
+					openName = n;
+					break;
+				}
+			}
+		}
+
+		if (markerIdx == -1)
+			Fail(name, scope $"no matching open marker for {name}");
+		Stack.RemoveAt(markerIdx);
+
+		return pen;
+	}
+
+	// ---- Containers ----
+
+	public static void OpenContainer(StringView name)
+	{
+		Stack.Add(.Mark(name));
+	}
+
+	// Stack effect: ( mark child1 … childN container -- container )
+	// The closing word pushes its container widget via NewWidget, then calls
+	// this to collect everything between the name-matched marker and it.
+	public static void CloseContainer(StringView name)
+	{
+		let container = PopWidget(name);
+
+		int markerIdx = -1;
+		StringView openName = default;
+		for (int i = Stack.Count - 1; i >= 0; i--)
+		{
+			if (Stack[i] case .Mark(let n))
+			{
+				markerIdx = i;
+				openName = n;
+				break;
+			}
+		}
+
+		if (markerIdx == -1)
+			Fail(name, scope $"no matching open marker for {name} — missing _{name}()?");
+		if (openName != name)
+			Fail(name, scope $"mismatched containers: closing {name} found an open _{openName}() marker");
+
+		let children = new:BuildAlloc List<Widget>();
+		for (int i = markerIdx + 1; i < Stack.Count; i++)
+		{
+			switch (Stack[i])
+			{
+			case .Elem(let w):
+				children.Add(w);
+			default:
+				let s = scope String();
+				Stack[i].ToString(s);
+				Fail(name, scope $"unconsumed {s} on the stack — did you forget a word that consumes it?");
+			}
+		}
+
+		Stack.RemoveRange(markerIdx, Stack.Count - markerIdx);
+		container.AttachComponent(new:BuildAlloc Children() { Items = children });
+		Stack.Add(.Elem(container));
+	}
+
+	// ---- Handlers ----
+
+	// Framework takes ownership; freed on the next rebuild. Handlers only ever
+	// run against the current tree, so this lifetime is safe.
+	public static void RegisterHandler(Delegate h)
+	{
+		sHandlers.Add(h);
+	}
+
+	// ---- Failure ----
+
+	[NoReturn]
+	public static void Fail(StringView word, StringView msg)
+	{
+		Console.WriteLine("WordUI error in word '{}': {}", word, msg);
+		PrintStack();
+		Runtime.FatalError(scope $"WordUI: error in word '{word}': {msg}");
+	}
+
+	// ---- Internals ----
+
+	static StackItem Pop(StringView word)
+	{
+		if (Stack.IsEmpty)
+			Fail(word, "stack underflow");
+		return Stack.PopBack();
+	}
+
+	[NoReturn]
+	static void FailPopped(StringView word, StringView expected)
+	{
+		Fail(word, scope $"{word} expects {expected} on the stack, found something else");
+	}
+}
+
+───── ./Core/Widget.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// The only widget class. Widgets are transient descriptions rebuilt on each
+// invalidate: identity + universal layout live here, every other property is a
+// component/property/behavior in the respective bag. New widgets are created by
+// factoring words, never by subclassing this type.
+public sealed class Widget
+{
+	public StringView Name;   // word-provided literal, e.g. "Label"; used by errors and dump
+	public int Key = -1;      // optional user identity hint (list items); feeds StableKey
+	public float Padding;
+	public int StableKey;     // persistent identity across rebuilds; assigned by KeyAssign post-build
+	public Rect mRect;        // assigned by the layout pass; transient (freed with arena)
+
+	List<Component> mComponents;
+	List<Property> mProperties;
+	List<Behavior> mBehaviors;
+
+	public this(StringView name, List<Component> compBag, List<Property> propBag, List<Behavior> behaviorBag)
+	{
+		Name = name;
+		mComponents = compBag;
+		mProperties = propBag;
+		mBehaviors = behaviorBag;
+	}
+
+	// Read-only accessors for the pipeline (draw, layout, tree dump).
+	public List<Component> Components => mComponents;
+	public List<Property> Properties => mProperties;
+	public List<Behavior> Behaviors => mBehaviors;
+
+	// ---- Component bag (pipeline participants: Measure, Draw*, HitTest) ----
+
+	public T GetComponent<T>() where T : Component
+	{
+		for (let c in mComponents)
+		{
+			let t = c as T;
+			if (t != null)
+				return t;
+		}
+		return null;
+	}
+
+	// Capability query with a named error — the modifier workhorse.
+	public T RequireComponent<T>(StringView word) where T : Component
+	{
+		let t = GetComponent<T>();
+		if (t == null)
+			UI.Fail(word, scope $"{Name} has no {typeof(T).GetName(.. scope .())} — {word} does not apply to it");
+		return t;
+	}
+
+	// Removes any existing component assignable from the same abstract family
+	// (e.g. a new Interior replaces an old Interior regardless of subtype),
+	// then attaches the new one. Used by focusing words like Background().
+	public void ReplaceComponent(Component c)
+	{
+		Type newType = c.GetType();
+		for (int i = mComponents.Count - 1; i >= 0; i--)
+		{
+			let existing = mComponents[i];
+			if (existing.GetType().IsSubtypeOf(newType) || newType.IsSubtypeOf(existing.GetType()))
+				mComponents.RemoveAt(i);
+		}
+		mComponents.Add(c);
+	}
+
+	// Duplicate component types are rejected: attaching a second TextStyle is
+	// almost always a construction word firing at the wrong stack top.
+	public void AttachComponent(Component c)
+	{
+		for (let existing in mComponents)
+		{
+			if (existing.GetType() == c.GetType())
+				UI.Fail("AttachComponent", scope $"{Name} already has a {c.GetType().GetName(.. scope .())} component");
+		}
+		mComponents.Add(c);
+	}
+
+	// ---- Property bag (pure data: TextStyle, LayoutHint, interaction state) ----
+
+	public T GetProperty<T>() where T : Property
+	{
+		for (let p in mProperties)
+		{
+			let t = p as T;
+			if (t != null)
+				return t;
+		}
+		return null;
+	}
+
+	public T RequireProperty<T>(StringView word) where T : Property
+	{
+		let t = GetProperty<T>();
+		if (t == null)
+			UI.Fail(word, scope $"{Name} has no {typeof(T).GetName(.. scope .())} property — {word} does not apply to it");
+		return t;
+	}
+
+	public void AttachProperty(Property p)
+	{
+		for (let existing in mProperties)
+		{
+			if (existing.GetType() == p.GetType())
+				UI.Fail("AttachProperty", scope $"{Name} already has a {p.GetType().GetName(.. scope .())} property");
+		}
+		mProperties.Add(p);
+	}
+
+	// ---- Behavior bag (event handlers: OnClick, etc.) ----
+
+	public T GetBehavior<T>() where T : Behavior
+	{
+		for (let b in mBehaviors)
+		{
+			let t = b as T;
+			if (t != null)
+				return t;
+		}
+		return null;
+	}
+
+	public T RequireBehavior<T>(StringView word) where T : Behavior
+	{
+		let t = GetBehavior<T>();
+		if (t == null)
+			UI.Fail(word, scope $"{Name} has no {typeof(T).GetName(.. scope .())} behavior — {word} does not apply to it");
+		return t;
+	}
+
+	public void AttachBehavior(Behavior b)
+	{
+		for (let existing in mBehaviors)
+		{
+			if (existing.GetType() == b.GetType())
+				UI.Fail("AttachBehavior", scope $"{Name} already has a {b.GetType().GetName(.. scope .())} behavior");
+		}
+		mBehaviors.Add(b);
+	}
+}
+
+───── ./Core/Node.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// The retained runtime element: a long-lived, heap-allocated node that persists
+// across rebuilds. While Widgets are transient descriptions rebuilt every frame,
+// Nodes provide stable identity, tree structure, lifecycle, and generic per-node
+// state storage that capabilities (hover, press, scroll, animation) write into
+// and read from.
+//
+// Node knows NOTHING about what any state slot means. Slot constants are defined
+// by the capabilities that use them (framework reserves 1..99; user capabilities
+// pick >= 100). The storage is a single Dictionary<int, Variant> — any type fits,
+// small value types (bool, int, float) are stored inline with zero allocation.
+//
+// Animation clocks are stored separately because they have internal structure
+// (progress, target, duration, curve) and their own lifecycle (self-pruning).
+public class Node
+{
+	public int StableKey;
+	public Node Parent;
+	public List<Node> Children = new .() ~ DeleteAndNullify!(_);
+
+	// Generic per-node state: capabilities write/read Variant values keyed by
+	// their own slot constants. A Variant stores small types inline without
+	// allocation; boxing only happens for large/value types that don't fit.
+	Dictionary<int, Variant> mState = new .() ~ delete _;
+
+	// ---- Animation clocks ----
+
+	struct Clock
+	{
+		public float P;          // current eased-input progress, [0,1]
+		public bool Target;      // true = animate toward 1, false = toward 0
+		public int DurationMs;
+		public Easing Curve;
+	}
+
+	// Clocks are keyed by StateId (the stable int from IInteractionState).
+	// They self-prune: clocks that settle at P=0 with Target=false are removed.
+	Dictionary<int, Clock> mClocks = new .() ~ delete _;
+
+	int mLastTickMs = -1;
+
+	public this(int key)
+	{
+		StableKey = key;
+	}
+
+	// ---- State access ----
+
+	// Raw access: capability defines its own slot constant and value type.
+	public void SetState(int slot, Variant value)
+	{
+		mState[slot] = value;
+	}
+
+	public Variant GetState(int slot)
+	{
+		return mState.GetValueOrDefault(slot);
+	}
+
+	// Typed conveniences for the 90% case (zero-allocation Variant path).
+
+	public bool GetBool(int slot, bool defaultValue = false)
+	{
+		Variant v = GetState(slot);
+		bool val = defaultValue;
+		v.TryGet<bool>(out val);
+		return val;
+	}
+
+	public void SetBool(int slot, bool value)
+	{
+		SetState(slot, Variant.Create(value));
+	}
+
+	public float GetFloat(int slot, float defaultValue = 0f)
+	{
+		Variant v = GetState(slot);
+		float val = defaultValue;
+		v.TryGet<float>(out val);
+		return val;
+	}
+
+	public void SetFloat(int slot, float value)
+	{
+		SetState(slot, Variant.Create(value));
+	}
+
+	public int GetInt(int slot, int defaultValue = 0)
+	{
+		Variant v = GetState(slot);
+		int val = defaultValue;
+		v.TryGet<int>(out val);
+		return val;
+	}
+
+	public void SetInt(int slot, int value)
+	{
+		SetState(slot, Variant.Create(value));
+	}
+
+	// ---- Animation clocks ----
+
+	// Ensure a clock exists for `stateId`, update its target/params, and return
+	// the current eased blend factor in [0,1] (0 = base, 1 = fully at target).
+	// Called by the draw-time style resolver for each animated state.
+	public float Blend(int stateId, bool active, int durationMs, Easing curve)
+	{
+		Clock c;
+		if (!mClocks.TryGetValue(stateId, out c))
+			c = .() { P = 0f, Target = active, DurationMs = durationMs, Curve = curve };
+		c.Target = active;
+		c.DurationMs = durationMs;
+		c.Curve = curve;
+		mClocks[stateId] = c;
+		return c.Curve.Apply(c.P);
+	}
+
+	// Advance all clocks by the wall-clock delta since the last tick. Prunes
+	// clocks that have settled at 0 (fully inactive).
+	public void Tick(int nowMs)
+	{
+		if (mLastTickMs < 0)
+			mLastTickMs = nowMs;
+		let dtMs = nowMs - mLastTickMs;
+		mLastTickMs = nowMs;
+		if (dtMs <= 0)
+			return;
+
+		List<int> settled = scope .();
+		for (var pair in mClocks)
+		{
+			var c = pair.value;
+			let step = c.DurationMs > 0 ? (float)dtMs / c.DurationMs : 1f;
+			if (c.Target)
+				c.P = Math.Min(1f, c.P + step);
+			else
+				c.P = Math.Max(0f, c.P - step);
+			mClocks[pair.key] = c;
+			if (!c.Target && c.P <= 0f)
+				settled.Add(pair.key);
+		}
+		for (let k in settled)
+			mClocks.Remove(k);
+
+		// Recurse into children so a single root Tick() call advances the whole tree.
+		for (let child in Children)
+			child.Tick(nowMs);
+	}
+
+	// True while any clock in this subtree is mid-transition.
+	public bool NeedsTick
+	{
+		get
+		{
+			for (let pair in mClocks)
+			{
+				let c = pair.value;
+				if (c.Target && c.P < 1f)
+					return true;
+				if (!c.Target && c.P > 0f)
+					return true;
+			}
+			for (let child in Children)
+			{
+				if (child.NeedsTick)
+					return true;
+			}
+			return false;
+		}
+	}
+
+	// ---- Lifecycle ----
+
+	// Dispose this node's own resources (state dictionary, clocks). Children
+	// are NOT recursively disposed here: the orphan loop in App.ReconcileTree
+	// disposes every orphaned Node individually. A reused child is reattached
+	// via ReconcileWidget, which calls Children.Clear() first to drop the old
+	// reference. Recursing here would double-free orphaned children.
+	public void Dispose()
+	{
+		Children.Clear();
+	}
+
+	// Add a child, setting its parent link.
+	public void AddChild(Node child)
+	{
+		child.Parent = this;
+		Children.Add(child);
+	}
+}
+
+───── ./Components/StackLayout.bf ─────
+using System;
+
+namespace WordUI;
+
+public enum Axis
+{
+	Horizontal,
+	Vertical
+}
+
+public class StackLayout : Component
+{
+	public Axis Axis;
+	public float Spacing;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(scope $" Axis={Axis} Spacing={Spacing}");
+	}
+}
+
+───── ./Components/Boundary.bf ─────
+using System;
+
+namespace WordUI;
+
+// Strokes the widget's bounds with a solid color, width, and optional corner
+// radius. Attached by the Border() focusing word; drawn in the DrawOverlay
+// pass (on top of content and children).
+public class Boundary : Component
+{
+	public Color StrokeColor = .(0, 0, 0, 0);
+	public float StrokeWidth = 1;
+	public float Radius;   // 0 = rectangular; rounded rect drawn when > 0
+
+	public override void Describe(String buf)
+	{
+		buf.Append(scope $" Stroke={StrokeColor} StrokeWidth={StrokeWidth}");
+		if (Radius > 0)
+			buf.Append(scope $" Radius={Radius}");
+	}
+
+	public override void DrawOverlay(Painter painter, Widget widget, Rect bounds)
+	{
+		let stroke = StyleResolve.Color(widget, StrokeColor, .Stroke);
+		let width = StyleResolve.Float(widget, StrokeWidth, .StrokeWidth);
+		if (stroke.A == 0 || width <= 0)
+			return;
+		if (Radius > 0)
+			painter.DrawRoundRect(bounds, Radius, width, stroke);
+		else
+			painter.DrawRect(bounds, stroke);
+	}
+}
+
+───── ./Components/ClipRegion.bf ─────
+using System;
+
+namespace WordUI;
+
+// Marker component: a widget carrying a ClipRegion clips its children's drawing
+// to its own bounds. A pure marker with no data — the clip is applied centrally
+// in SDLApp.DrawWidget (which brackets the children recurse with the Painter's
+// clip stack), the same place the drag/scroll render offset is folded in.
+//
+// Clipping is its own composable capability, independent of scroll: Clip() works
+// on any container. A Scrollable() that should hide its overflow composes the two
+// (`Scrollable(...); Clip();`).
+public class ClipRegion : Component
+{
+	public override void Describe(String buf)
+	{
+		buf.Append(" Clip");
+	}
+}
+
+extension UI
+{
+	// ( widget -- widget ) — clip the stack-top container's children to its box.
+	public static void Clip()
+	{
+		Top("Clip").AttachComponent(new:BuildAlloc ClipRegion());
+	}
+}
+
+───── ./Components/Interior.bf ─────
+using System;
+
+namespace WordUI;
+
+// Fills the widget's bounds with a solid color and an optional corner radius.
+// Attached by the Background() focusing word; drawn in the DrawBackground pass
+// (beneath content and children).
+public class Interior : Component
+{
+	public Color FillColor = .(0, 0, 0, 0);
+	public float Radius;   // 0 = rectangular; rounded rect drawn when > 0
+
+	public override void Describe(String buf)
+	{
+		buf.Append(scope $" Fill={FillColor}");
+		if (Radius > 0)
+			buf.Append(scope $" Radius={Radius}");
+	}
+
+	public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+	{
+		let fill = StyleResolve.Color(widget, FillColor, .Fill);
+		if (fill.A == 0)
+			return;
+		if (Radius > 0)
+			painter.FillRoundRect(bounds, Radius, fill);
+		else
+			painter.FillRect(bounds, fill);
+	}
+}
+
+───── ./Components/ScrollView.bf ─────
+using System;
+
+namespace WordUI;
+
+// Marker component: a widget carrying a ScrollView offsets its children along its
+// StackLayout axis by a persistent scroll offset stored in the retained Node
+// (keyed by StableKey, so it survives rebuilds — the M4 exit criterion). The
+// offset is folded into the render-time (ox,oy) in SDLApp.DrawWidget, reusing the
+// exact translation mechanism drag already uses; no relayout happens.
+//
+// A pure marker: it stores nothing itself. The scroll offset lives in the store;
+// the content extent used to clamp it is derived from the child rects at wheel
+// time by ScrollTracker.
+public class ScrollView : Component
+{
+	public override void Describe(String buf)
+	{
+		buf.Append(" Scroll");
+	}
+}
+
+───── ./Components/Text.bf ─────
+using System;
+using SDL3_ttf;
+
+namespace WordUI;
+
+// A widget's text content: the string to render, plus the Measure and
+// DrawContent pipeline hooks. Styling (font size, color) is read from the
+// widget's TextStyleProperty; sensible defaults apply when it is absent.
+public class TextComponent : Component
+{
+	public String Content;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(scope $" Text=\"{Content}\"");
+	}
+
+	public override Size Measure(Size constraint)
+	{
+		let font = SDLApp.sDefaultFont;
+		if (font == null || Content == null)
+			return .(0, 0);
+
+		let cStr = Content.CStr();
+		int32 w = 0, h = 0;
+		TTF_GetStringSize(font, cStr, 0, &w, &h);
+		return .((float)w, (float)h);
+	}
+
+	public override void DrawContent(Painter painter, Widget widget, Rect bounds)
+	{
+		if (Content == null)
+			return;
+
+		var ts = widget.GetProperty<TextStyleProperty>();
+		Color baseColor = ts != null ? ts.TextColor : .Black;
+		Color color = StyleResolve.Color(widget, baseColor, .TextColor);
+		painter.DrawText(Content, bounds.X, bounds.Y, color);
+	}
+}
+
+───── ./Widgets/Label.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// ( str -- widget )
+	public static void Label()
+	{
+		let text = PopStr("Label");   // inputs first, then the widget
+		NewWidget("Label");
+		AttachComponent(new:BuildAlloc TextComponent() { Content = text });
+		AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 12, TextColor = .Black });
+	}
+
+	public static void Label(StringView s) { Str(s); Label(); }
+}
+
+───── ./Widgets/Stack.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	public static void _HStack() { OpenContainer("HStack"); }
+
+	public static void HStack_()
+	{
+		NewWidget("HStack");
+		AttachComponent(new:BuildAlloc StackLayout() { Axis = .Horizontal });
+		CloseContainer("HStack");
+	}
+
+	public static void HStack(delegate void() body) { _HStack(); body(); HStack_(); }
+
+	public static void _VStack() { OpenContainer("VStack"); }
+
+	public static void VStack_()
+	{
+		NewWidget("VStack");
+		AttachComponent(new:BuildAlloc StackLayout() { Axis = .Vertical });
+		CloseContainer("VStack");
+	}
+
+	public static void VStack(delegate void() body) { _VStack(); body(); VStack_(); }
+}
+
+───── ./Widgets/Spacer.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// ( -- widget ) — flex-grow gap; the layout pass gives it leftover space.
+	public static void Spacer()
+	{
+		NewWidget("Spacer");
+	}
+}
+
+───── ./Widgets/Button.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// ( str -- widget ) — a button is a styled label with default interior,
+	// border, and padding. Clickability arrives when OnClick attaches a Clickable.
+	//
+	// Factored word: any property can be overridden by re-focusing after the
+	// word, e.g.:
+	//   Button("Delete"); Background(scope () => { Fill(.Red); Radius(6); });
+	public static void Button()
+	{
+		let text = PopStr("Button");
+		NewWidget("Button");
+		AttachComponent(new:BuildAlloc TextComponent() { Content = text });
+		AttachProperty(new:BuildAlloc TextStyleProperty() { FontSize = 12, TextColor = .Black });
+		Background(scope () => { Fill(.(80, 80, 80, 255)); Radius(4); });
+		Border(scope () => { Stroke(.(120, 120, 120, 255)); StrokeWidth(1); Radius(4); });
+		Padding(8);
+	}
+
+	public static void Button(StringView text) { Str(text); Button(); }
+}
+
+───── ./Widgets/Scrollable.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// A Scrollable is a stack (default vertical) that carries a ScrollView marker,
+	// so the wheel scrolls its children and its scroll offset survives rebuilds.
+	// It does NOT clip on its own — compose `Scrollable(...); Clip();` to hide
+	// overflow, and set the axis with `Horizontal()`/`Vertical()`. Give it a
+	// bounded main-axis size (e.g. `Height(.Fixed(240))`) so its content overflows
+	// the viewport rather than the container growing to fit.
+	//
+	// Built from the same paired-primitive container idiom as HStack/VStack (see
+	// Widgets/Stack.bf): _Scrollable() opens the marker, Scrollable_() closes it.
+	public static void _Scrollable() { OpenContainer("Scrollable"); }
+
+	public static void Scrollable_()
+	{
+		NewWidget("Scrollable");
+		AttachComponent(new:BuildAlloc StackLayout() { Axis = .Vertical });
+		AttachComponent(new:BuildAlloc ScrollView());
+		CloseContainer("Scrollable");
+	}
+
+	public static void Scrollable(delegate void() body) { _Scrollable(); body(); Scrollable_(); }
+}
+
+───── ./Modifiers/Layout.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// Padding is universal — every widget participates in flow layout.
+	public static void Padding(float all)
+	{
+		Top("Padding").Padding = all;
+	}
+
+	public static void Spacing(float px)
+	{
+		Top("Spacing").RequireComponent<StackLayout>("Spacing").Spacing = px;
+	}
+}
+
+───── ./Modifiers/Identity.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// Stable identity for list items; becomes the persistent-state key once
+	// widget-local state (scroll, focus, animations) exists.
+	public static void Key(int id)
+	{
+		Top("Key").Key = id;
+	}
+}
+
+───── ./Modifiers/Styling.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// ---- Interior pen: Background() ----
+
+	// ( -- marker pen ) pushes a marker and a fresh Interior pen. Property
+	// words that follow (Fill, Radius) mutate the pen on the stack top.
+	public static void _Interior()
+	{
+		OpenContainer("Interior");
+		PushPen(new:BuildAlloc Interior());
+	}
+
+	// Pops the pen, pops the matching marker, attaches the Interior to the
+	// widget below the marker (the stack-top widget when the block opened).
+	public static void Interior_()
+	{
+		let pen = ClosePen("Interior");
+		let interior = pen as Interior;
+		if (interior == null)
+			Fail("Interior_", "expected an Interior pen on the stack");
+		ReplaceComponent(interior);
+	}
+
+	public static void Background(delegate void() body)
+	{
+		// Inside a state body there is no pen to open; the enclosed Fill/Radius
+		// record onto the patch instead. (Radius is not yet an animatable field
+		// and is ignored in patch mode.)
+		if (InPatch) { body(); return; }
+		_Interior();
+		body();
+		Interior_();
+	}
+
+	// ---- Border pen: Border() ----
+
+	public static void _Border()
+	{
+		OpenContainer("Border");
+		PushPen(new:BuildAlloc Boundary());
+	}
+
+	public static void Border_()
+	{
+		let pen = ClosePen("Border");
+		let boundary = pen as Boundary;
+		if (boundary == null)
+			Fail("Border_", "expected a Boundary pen on the stack");
+		ReplaceComponent(boundary);
+	}
+
+	public static void Border(delegate void() body)
+	{
+		if (InPatch) { body(); return; }
+		_Border();
+		body();
+		Border_();
+	}
+
+	// ---- Pen property words ----
+
+	public static void Fill(Color c)
+	{
+		if (RecordFill(c)) return;
+		let pen = TopPen("Fill");
+		let i = pen as Interior;
+		if (i == null)
+			Fail("Fill", "no active Interior — are you inside a Background block?");
+		i.FillColor = c;
+	}
+
+	public static void Stroke(Color c)
+	{
+		if (RecordStroke(c)) return;
+		let pen = TopPen("Stroke");
+		let b = pen as Boundary;
+		if (b == null)
+			Fail("Stroke", "no active Border — are you inside a Border block?");
+		b.StrokeColor = c;
+	}
+
+	public static void Radius(float r)
+	{
+		if (InPatch) return;   // radius is not an animatable patch field yet
+		let pen = TopPen("Radius");
+		let i = pen as Interior;
+		if (i != null)
+			i.Radius = r;
+		else
+		{
+			let b = pen as Boundary;
+			if (b != null)
+				b.Radius = r;
+			else
+				Fail("Radius", "no active pen — are you inside a Background or Border block?");
+		}
+	}
+
+	public static void StrokeWidth(float w)
+	{
+		if (RecordStrokeWidth(w)) return;
+		let pen = TopPen("StrokeWidth");
+		let b = pen as Boundary;
+		if (b == null)
+			Fail("StrokeWidth", "no active Border — are you inside a Border block?");
+		b.StrokeWidth = w;
+	}
+}
+
+───── ./Diagnostics/StackDump.bf ─────
+using System;
+
+namespace WordUI;
+
+extension UI
+{
+	// Factor's `.s`: dump the stack, top last.
+	public static void PrintStack()
+	{
+		Console.WriteLine("--- stack ({} items, top last) ---", Stack.Count);
+		for (let item in Stack)
+		{
+			let s = scope String();
+			item.ToString(s);
+			Console.WriteLine("  {}", s);
+		}
+	}
+}
+
+───── ./Diagnostics/TreeDump.bf ─────
+using System;
+
+namespace WordUI;
+
+// Stand-in renderer: indented dump of the current tree. Fully generic — a
+// user-defined component appears here through its Describe override without
+// the framework knowing it exists.
+extension App
+{
+	public void DumpTree()
+	{
+		Console.WriteLine("# ---- [UI Tree Dump] ---- #");
+		if (mRoot == null)
+		{
+			Console.WriteLine("(no tree — call RebuildIfNeeded first)");
+			return;
+		}
+		Dump(mRoot, 0);
+		Console.WriteLine("# ---- [/UI Tree Dump] ---- #");
+	}
+
+	static void Dump(Widget w, int depth)
+	{
+		let line = scope String();
+		line.Append(' ', depth * 2);
+		line.Append(scope $"<{w.Name}");
+
+		let props = scope String();
+
+		// Components (pipeline participants)
+		for (let c in w.Components)
+		{
+			let d = scope String();
+			c.Describe(d);
+
+			if (!d.IsEmpty)
+			{
+				if (!props.IsEmpty) props.Append(' ');
+				props.Append(d);
+			}
+		}
+
+		// Properties (pure data)
+		for (let p in w.Properties)
+		{
+			let d = scope String();
+			p.Describe(d);
+
+			if (!d.IsEmpty)
+			{
+				if (!props.IsEmpty) props.Append(' ');
+				props.Append(d);
+			}
+		}
+
+		// Behaviors (event handlers)
+		for (let b in w.Behaviors)
+		{
+			let d = scope String();
+			b.Describe(d);
+
+			if (!d.IsEmpty)
+			{
+				if (!props.IsEmpty) props.Append(' ');
+				props.Append(d);
+			}
+		}
+
+		if (!props.IsEmpty) props.Append(' ');
+		props.AppendF(" Padding={}", w.Padding);
+
+		if (!props.IsEmpty) props.Append(' ');
+		props.AppendF(scope $" Key={w.Key}");
+
+		if (!props.IsEmpty) props.Append(' ');
+		props.Append(scope $" Rect=({w.mRect.X},{w.mRect.Y}, {w.mRect.Width}x{w.mRect.Height})");
+
+		if (!props.IsEmpty)
+			line.Append(scope $"{props}");
+
+		let kids = w.GetComponent<Children>();
+		if (kids != null)
+		{
+			Console.WriteLine(scope $"{line}>");
+
+			for (let child in kids.Items)
+				Dump(child, depth + 1);
+
+			Console.Write(scope String(' ', depth * 2));
+			Console.WriteLine(scope $"</{w.Name}>");
+		} else {
+			Console.WriteLine(scope $"{line}/>");
+		}
+	}
+}
+
+───── ./Properties/LayoutHint.bf ─────
+using System;
+
+namespace WordUI;
+
+// Cross-axis alignment of a widget within the space its parent allocates.
+// Default is Stretch (fill the full cross axis); Start/Center/End position
+// the widget at its intrinsic cross-axis size.
+public enum CrossAlignment
+{
+	Stretch,
+	Start,
+	Center,
+	End
+}
+
+// Sizing constraint a widget places on its own width or height. Communicated
+// to the layout pass via LayoutHint. The Apply method returns the final size
+// given an intrinsic measurement and the parent constraint.
+public enum SizingConstraints
+{
+	case Unconstrained;
+	case Fixed(float);
+	case Min(float);
+	case Max(float);
+	case Percent(float);
+	case Range(float, float);
+
+	public float Apply(float intrinsic, float parentConstraint)
+	{
+		switch (this)
+		{
+		case .Unconstrained:
+			return intrinsic;
+		case .Fixed(let v):
+			return v;
+		case .Min(let v):
+			return Math.Max(intrinsic, v);
+		case .Max(let v):
+			return Math.Min(intrinsic, v);
+		case .Percent(let v):
+			return parentConstraint * v / 100;
+		case .Range(let min, let max):
+			return Math.Clamp(intrinsic, min, max);
+		}
+	}
+
+	public void DescribeTo(String buf, StringView label)
+	{
+		switch (this)
+		{
+		case .Unconstrained:
+		case .Fixed(let v):   buf.Append(scope $" {label}=Fixed({v})");
+		case .Min(let v):     buf.Append(scope $" {label}=Min({v})");
+		case .Max(let v):     buf.Append(scope $" {label}=Max({v})");
+		case .Percent(let v): buf.Append(scope $" {label}={v}%");
+		case .Range(let min, let max): buf.Append(scope $" {label}=[{min}..{max}]");
+		}
+	}
+}
+
+// Pure layout preferences a child communicates to its parent's layout pass.
+// Attached on demand by alignment and sizing modifier words. A Property, not a
+// Component — it has no Measure, Draw, or other pipeline hooks; queried by the
+// layout pass via GetProperty<LayoutHint>.
+public class LayoutHint : Property
+{
+	public CrossAlignment CrossAlign = .Stretch;
+	public SizingConstraints Width = .Unconstrained;
+	public SizingConstraints Height = .Unconstrained;
+
+	public override void Describe(String buf)
+	{
+		if (CrossAlign != .Stretch)
+			buf.Append(scope $" CrossAlign={CrossAlign}");
+		Width.DescribeTo(buf, "Width");
+		Height.DescribeTo(buf, "Height");
+	}
+}
+
+extension UI
+{
+	// Shared helper: returns the LayoutHint on the stack-top widget,
+	// creating and attaching one on demand. The word name is used for
+	// clear error messages when the stack top is not a widget.
+	static LayoutHint GetOrCreateLayoutHint(StringView word)
+	{
+		let w = Top(word);
+		var hint = w.GetProperty<LayoutHint>();
+		if (hint == null)
+		{
+			hint = new:BuildAlloc LayoutHint();
+			w.AttachProperty(hint);
+		}
+		return hint;
+	}
+
+	// ---- Cross-axis alignment ----
+
+	public static void Center()
+	{
+		GetOrCreateLayoutHint("Center").CrossAlign = .Center;
+	}
+
+	public static void AlignStart()
+	{
+		GetOrCreateLayoutHint("AlignStart").CrossAlign = .Start;
+	}
+
+	public static void AlignEnd()
+	{
+		GetOrCreateLayoutHint("AlignEnd").CrossAlign = .End;
+	}
+
+	public static void AlignStretch()
+	{
+		GetOrCreateLayoutHint("AlignStretch").CrossAlign = .Stretch;
+	}
+
+	// ---- Sizing constraints ----
+
+	public static void Width(SizingConstraints c)
+	{
+		GetOrCreateLayoutHint("Width").Width = c;
+	}
+
+	public static void Height(SizingConstraints c)
+	{
+		GetOrCreateLayoutHint("Height").Height = c;
+	}
+
+	// Convenience: set both axes to Fixed. FixedSize(200) is the square
+	// shorthand; FixedSize(200, 100) sets width and height independently.
+	public static void FixedSize(float wh)
+	{
+		Width(.Fixed(wh));
+		Height(.Fixed(wh));
+	}
+
+	public static void FixedSize(float w, float h)
+	{
+		Width(.Fixed(w));
+		Height(.Fixed(h));
+	}
+}
+
+───── ./Properties/HoverState.bf ─────
+using System;
+
+namespace WordUI;
+
+// Active while the pointer is over the widget at ownerKey. Hover is resolved at
+// draw (no rebuild), so entering/leaving repaints without the flicker or CPU
+// spike a per-motion rebuild would cause.
+// Queries the retained Node for SlotHover (slot 1) via App.FindNode.
+public class HoverState : Property, IInteractionState
+{
+	public int StateId => 2;
+	public bool IsActiveFor(int ownerKey)
+	{
+		let node = App.Instance.FindNode(ownerKey);
+		return node != null && node.GetBool(HoverTracker.SlotHover);
+	}
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" hover");
+	}
+}
+
+extension UI
+{
+	// Convenience: records the enclosed styling while the widget is hovered.
+	public static void IfHover(delegate void() body) => IfActive<HoverState>(body);
+}
+
+───── ./Properties/PressState.bf ─────
+using System;
+
+namespace WordUI;
+
+// Interaction states are Properties that report, for a given widget identity,
+// whether they are currently active. The draw-time resolver queries this to
+// decide whether a recorded StatePatch applies. Implementations read from
+// the retained Node tree (keyed by StableKey), so state survives rebuilds
+// and never touches a freed Widget*.
+//
+// StateId must be a stable, unique small int per state type: it keys the
+// animation clock so a transition keeps its progress across rebuilds. User
+// states pick their own id (framework reserves 1..99).
+public interface IInteractionState
+{
+	int StateId { get; }
+	bool IsActiveFor(int ownerKey);
+}
+
+// Active while the widget at ownerKey is being pressed.
+// Queries the retained Node for SlotPress (slot 2) via App.FindNode.
+public class PressState : Property, IInteractionState
+{
+	public int StateId => 1;
+	public bool IsActiveFor(int ownerKey)
+	{
+		let node = App.Instance.FindNode(ownerKey);
+		return node != null && node.GetBool(PressTracker.SlotPress);
+	}
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" pressed");
+	}
+}
+
+extension UI
+{
+	// Convenience: records the enclosed styling while the widget is pressed.
+	public static void IfPressed(delegate void() body) => IfActive<PressState>(body);
+}
+
+───── ./Properties/StatePatch.bf ─────
+using System;
+using System.Collections;
+
+namespace WordUI;
+
+// A field-level style delta produced by a state body (IfHover/IfPressed/...).
+// Unlike the old layer variants — which cloned a whole Property and replaced it
+// wholesale — a patch records only the individual fields the body touched, so
+// two concurrently-active states that set different fields (hover→FontSize,
+// focus→TextColor) COMPOSE at draw instead of one clobbering the other.
+//
+// Per-field `*Anim` flags mark fields recorded inside a Transition(); the whole
+// patch shares one Duration/Curve (last Transition wins). Non-animated fields
+// apply instantly when their state is active.
+class StatePatch
+{
+	// Interior fill
+	public bool HasFill; public Color Fill; public bool FillAnim;
+	// Text
+	public bool HasTextColor; public Color TextColor; public bool TextColorAnim;
+	public bool HasFontSize; public float FontSize; public bool FontSizeAnim;
+	// Border stroke
+	public bool HasStroke; public Color Stroke; public bool StrokeAnim;
+	public bool HasStrokeWidth; public float StrokeWidth; public bool StrokeWidthAnim;
+
+	// Shared animation parameters for the animated fields in this patch.
+	public int DurationMs = 150;
+	public Easing Curve = .EaseInOut;
+}
+
+// One recorded patch plus the state that gates it. `State.IsActiveFor(key)`
+// (read from the retained Node at draw) decides whether/how strongly the
+// patch applies.
+struct PatchRecord
+{
+	public IInteractionState State;
+	public StatePatch Patch;
+}
+
+// The single generic property that carries every interaction variant for a
+// widget. Replaces the plan's per-Component/per-Property layer integer: one
+// property, no state-specific fields on the base model.
+class InteractionStyle : Property
+{
+	public List<PatchRecord> Records;
+
+	public override void Describe(String buf)
+	{
+		if (Records != null && !Records.IsEmpty)
+			buf.AppendF(" states={}", Records.Count);
+	}
+}
+
+───── ./Properties/TextStyle.bf ─────
+using System;
+
+namespace WordUI;
+
+// Pure styling data for text rendering. Attached by Label/Button as defaults;
+// modified by TextColor and FontSize modifier words. Read by TextComponent
+// during Measure and DrawContent.
+public class TextStyleProperty : Property
+{
+	public float FontSize = 12;
+	public Color TextColor = .Black;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(scope $" FontSize={FontSize}");
+		buf.Append(scope $" Color={TextColor}");
+	}
+}
+
+extension UI
+{
+	public static void TextColor(Color c)
+	{
+		if (RecordTextColor(c)) return;
+		Top("TextColor").RequireProperty<TextStyleProperty>("TextColor").TextColor = c;
+	}
+
+	public static void FontSize(float px)
+	{
+		if (RecordFontSize(px)) return;
+		Top("FontSize").RequireProperty<TextStyleProperty>("FontSize").FontSize = px;
+	}
+}
+
+───── ./Behaviors/OnClick.bf ─────
+using System;
+
+namespace WordUI;
+
+public delegate void ClickHandler();
+
+public class OnClickBehavior : Behavior
+{
+	public ClickHandler Handler;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" OnClick");
+	}
+}
+
+extension UI
+{
+	// Behavior words attach on demand: OnClick makes any widget clickable,
+	// so no Clickable-variant widgets ever need to exist.
+	public static void OnClick(ClickHandler h)
+	{
+		let w = Top("OnClick");
+		var b = w.GetBehavior<OnClickBehavior>();
+		if (b == null)
+		{
+			b = new:BuildAlloc OnClickBehavior();
+			w.AttachBehavior(b);
+		}
+		RegisterHandler(h);
+		b.Handler = h;
+	}
+}
+
+───── ./Behaviors/OnDrag.bf ─────
+using System;
+
+namespace WordUI;
+
+// Fired with the incremental pointer delta each time the pointer moves while
+// this widget holds the drag capture.
+public delegate void DragHandler(float dx, float dy);
+
+public class OnDragBehavior : Behavior
+{
+	public DragHandler Handler;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" OnDrag");
+	}
+}
+
+extension UI
+{
+	// Makes the stack-top widget draggable. On press it captures the pointer;
+	// motion delivers deltas here and offsets the widget at draw (no relayout);
+	// release ends the capture. Capture means events keep routing here even when
+	// the pointer leaves the widget's rect.
+	public static void OnDrag(DragHandler h)
+	{
+		let w = Top("OnDrag");
+		var b = w.GetBehavior<OnDragBehavior>();
+		if (b == null)
+		{
+			b = new:BuildAlloc OnDragBehavior();
+			w.AttachBehavior(b);
+		}
+		RegisterHandler(h);
+		b.Handler = h;
+	}
+}
+
+───── ./Behaviors/OnScroll.bf ─────
+using System;
+
+namespace WordUI;
+
+// Fired with the widget's new (clamped) scroll offset each time a wheel event
+// scrolls it. The rounding-out of the event vocabulary next to OnClick/OnDrag:
+// a discrete impulse consumer rather than a press/capture gesture.
+public delegate void ScrollHandler(float offset);
+
+public class OnScrollBehavior : Behavior
+{
+	public ScrollHandler Handler;
+
+	public override void Describe(String buf)
+	{
+		buf.Append(" OnScroll");
+	}
+}
+
+extension UI
+{
+	// Makes the stack-top widget react to scroll: ScrollTracker invokes the
+	// handler with the new offset after a wheel event adjusts it. Attaches on
+	// demand, exactly like OnClick/OnDrag.
+	public static void OnScroll(ScrollHandler h)
+	{
+		let w = Top("OnScroll");
+		var b = w.GetBehavior<OnScrollBehavior>();
+		if (b == null)
+		{
+			b = new:BuildAlloc OnScrollBehavior();
+			w.AttachBehavior(b);
+		}
+		RegisterHandler(h);
+		b.Handler = h;
+	}
+}
+
+───── ./Program.bf ─────
+using System;
+using System.Collections;
+using System.Diagnostics;
+
+namespace WordUI;
+
+using static WordUI.UI;
+
+// Factored words: indistinguishable from framework words at the call site.
+static class Words
+{
+	public static void TitleLabel(StringView text)
+	{
+		Label(text); FontSize(24); TextColor(.White);
+	}
+
+	// A todo list row, built concatenatively from smaller words — an HStack of a
+	// label, a spacer, and a delete button. This is the "ListView item" of the
+	// milestone: a complex widget composed from basic words, no Widget subclass.
+	// `id` gives the row a stable identity so removing a row above it doesn't
+	// shift its retained interaction state.
+	public static void TodoRow(int id, StringView text, ClickHandler onDelete)
+	{
+		HStack(scope () => {
+			Label(text); AlignStart(); TextColor(.White);
+			Spacer();
+			Button("x"); {
+				TextColor(.White);
+				IfPressed(scope () => { Fill(.(120, 120, 120, 255)); });
+				OnClick(onDelete);
+			}
+		}); Key(id); Spacing(8);
+	}
+}
+
+using static WordUI.Words;
+
+// M4 demo: a functional todo app — add an item, remove an item, and scroll the
+// list. The list lives in a Scrollable container with a bounded height and Clip,
+// so it overflows into a scroll viewport whose offset survives the rebuild each
+// add/remove triggers. No text input yet (M5), so item text is auto-generated.
+class TodoSDLApp : SDLApp
+{
+	// App-owned state: id keeps a stable identity per item as the list churns.
+	List<(int id, String text)> mTodos = new .() ~ {
+		for (let t in _) delete t.text;
+		delete _;
+	};
+	int mNextId = 1;
+
+	public this()
+	{
+		ClearColor = .(20, 40, 60, 255);
+		for (int i = 0; i < 8; i++)
+			AddTodo();
+	}
+
+	void AddTodo()
+	{
+		let n = mNextId++;
+		mTodos.Add((n, new String(scope $"Task {n}")));
+		Invalidate();
+	}
+
+	void RemoveTodo(int id)
+	{
+		for (int i = 0; i < mTodos.Count; i++)
+		{
+			if (mTodos[i].id == id)
+			{
+				delete mTodos[i].text;
+				mTodos.RemoveAt(i);
+				break;
+			}
+		}
+		Invalidate();
+	}
+
+	protected override void Build()
+	{
+		VStack(scope () => {
+			TitleLabel("Todos"); Center();
+
+			HStack(scope () => {
+				Button("Add"); {
+					TextColor(.White);
+					IfPressed(scope () => { Fill(.(120, 120, 120, 255)); });
+					OnClick(new () => { AddTodo(); });
+				}
+				Spacer();
+				Label(scope $"{mTodos.Count} items"); AlignEnd(); TextColor(.(180, 180, 180, 255));
+			}); Spacing(8);
+
+			// The scroll viewport: a vertical Scrollable, clipped to a fixed
+			// height. Its children overflow and the wheel scrolls them.
+			Scrollable(scope () => {
+				for (let t in mTodos)
+				{
+					let id = t.id;   // per-iteration copy for the delete closure
+					TodoRow(id, t.text, new () => { RemoveTodo(id); });
+				}
+			}); Height(.Fixed(240)); Spacing(6); Clip();
+		}); Padding(16);
+	}
+}
+
+class Program
+{
+	public static int Main(String[] args)
+	{
+		if (args.Count > 0 && args[0] == "--test-mismatch")
+			return RunApp(scope MismatchApp());
+		if (args.Count > 0 && args[0] == "--test-unbalanced")
+			return RunApp(scope UnbalancedApp());
+		if (args.Count > 0 && args[0] == "--test-unclosed-pen")
+			return RunApp(scope UnclosedPenApp());
+		if (args.Count > 0 && args[0] == "--test-leftover")
+			return RunApp(scope LeftoverApp());
+
+		let app = scope TodoSDLApp();
+		app.Run();
+		return 0;
+	}
+
+	static int RunApp(App app)
+	{
+		app.RebuildIfNeeded();
+		return 0;
+	}
+}
+
+// Negative test: closing a container of the wrong kind must fail with a
+// named-marker error, not build a scrambled tree.
+class MismatchApp : App
+{
+	protected override void Build()
+	{
+		_VStack();
+		Label("oops");
+		HStack_();   // wrong close: the open marker is a VStack
+	}
+}
+
+// Negative test: a missing close word must trip the stack-hygiene check.
+class UnbalancedApp : App
+{
+	protected override void Build()
+	{
+		_VStack();
+		Label("no close word follows");
+	}
+}
+
+// Negative test: a pen block opened but not closed must leave a marker and
+// pen on the stack, which triggers a hygiene error when the outer container
+// closes.
+class UnclosedPenApp : App
+{
+	protected override void Build()
+	{
+		VStack(scope () => {
+			_Interior(); Fill(.Red);
+			// missing Interior_()
+			Label("x");
+		});
+	}
+}
+
+// Negative test: primitive values nothing consumed must be reported by name
+// when the enclosing container closes.
+class LeftoverApp : App
+{
+	protected override void Build()
+	{
+		VStack(scope () => {
+			PushInt(42); PushFloat(3.14f); PushBool(true);
+			Label("x");
+		});
+	}
+}
+
+───── ./Codebase.txt ─────

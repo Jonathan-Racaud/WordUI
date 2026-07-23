@@ -6,32 +6,28 @@ namespace WordUI;
 // this widget holds the drag capture.
 public delegate void DragHandler(float dx, float dy);
 
-public class OnDragBehavior : Behavior
-{
-	public DragHandler Handler;
-
-	public override void Describe(String buf)
-	{
-		buf.Append(" OnDrag");
-	}
-}
-
 extension UI
 {
-	// Makes the stack-top widget draggable. On press it captures the pointer;
-	// motion delivers deltas here and offsets the widget at draw (no relayout);
-	// release ends the capture. Capture means events keep routing here even when
-	// the pointer leaves the widget's rect.
+	// Makes the stack-top widget draggable. Attaches DragHandlerBehavior (which
+	// owns the DragHandler delegate directly — one behavior, no separate holder)
+	// and RenderDragOffset (the component that applies the accumulated offset
+	// at draw via GetRenderOffset). On press it captures the pointer; motion
+	// delivers deltas; release ends the capture. No relayout — visual follows
+	// the pointer through GetRenderOffset.
 	public static void OnDrag(DragHandler h)
 	{
 		let w = Top("OnDrag");
-		var b = w.GetBehavior<OnDragBehavior>();
-		if (b == null)
+		var dh = w.GetBehavior<DragHandlerBehavior>();
+		if (dh == null)
 		{
-			b = new:BuildAlloc OnDragBehavior();
-			w.AttachBehavior(b);
+			dh = new:BuildAlloc DragHandlerBehavior();
+			w.AttachBehavior(dh);
 		}
 		RegisterHandler(h);
-		b.Handler = h;
+		dh.Handler = h;
+
+		// Attach the render-offset component if not already present.
+		if (w.GetComponent<RenderDragOffset>() == null)
+			w.AttachComponent(new:BuildAlloc RenderDragOffset());
 	}
 }

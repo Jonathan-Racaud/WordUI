@@ -47,42 +47,37 @@ public struct StateSlot<T> where T : struct
 	}
 }
 
-// Framework-reserved state slots (1–99). Each tracker/property reads and writes
+// Framework-reserved state slots (1–99). Each capability reads and writes
 // one of these; user capabilities define their own StateSlot<T> fields starting
-// at 100.
+// at 100. Slots are preserved during pruning only when a capability on the
+// widget declares them via IHasStateSlots (behaviors) or IInteractionState
+// (properties) — no slot is "always live."
 //
-// Slot  |  Name   | Type  | Used by
-// ------+---------+-------+----------
-//   1   |  Hover  | bool  | HoverTracker / HoverState
-//   2   |  Press  | bool  | PressTracker / PressState
-//   3   |  Scroll | float | ScrollTracker
+// Slot  |  Name       | Type          | Used by
+// ------+-------------+---------------+----------
+//   1   |  Hover      | bool          | HoverHandler / HoverState
+//   2   |  Press      | bool          | PressHandler / PressState
+//   3   |  Scroll     | float         | ScrollHandlerBehavior / ScrollView
+//   4   |  DragOffset | DragOffset    | DragHandlerBehavior / RenderDragOffset
+//   5   |  Focus      | bool          | FocusHandler
 public static class StateSlots
 {
 	public static readonly StateSlot<bool> Hover = .(1, "Hover");
 	public static readonly StateSlot<bool> Press = .(2, "Press");
 	public static readonly StateSlot<float> Scroll = .(3, "Scroll");
-
-	// Framework-reserved slot ids that are always preserved during state
-	// pruning. Trackers like HoverTracker/PressTracker/ScrollTracker write
-	// to these slots regardless of whether an IInteractionState property is
-	// on the widget, so they must survive the live-slot sweep. User slots
-	// (>= 100) are preserved only when an IInteractionState on the widget
-	// declares the corresponding StateId.
-	public static readonly HashSet<int> FrameworkIds = new HashSet<int>() ~ delete _;
+	public static readonly StateSlot<DragOffset> DragOffset = .(4, "DragOffset");
+	public static readonly StateSlot<bool> Focus = .(5, "Focus");
 
 	static this()
 	{
-		FrameworkIds.Add(1); // Hover
-		FrameworkIds.Add(2); // Press
-		FrameworkIds.Add(3); // Scroll
-
-		// Register framework slot lifecycles. All three are simple value types
-		// (bool / float) with no external resources, so all four callbacks are
-		// null — the registration exists to prove the lifecycle mechanism and
-		// serve as documentation for user capabilities (which slot IDs ≥ 100
-		// and register their own lifecycles here).
-		StateSlotRegistry.Register(1, .() { }); // Hover  — no-op lifecycle
-		StateSlotRegistry.Register(2, .() { }); // Press  — no-op lifecycle
-		StateSlotRegistry.Register(3, .() { }); // Scroll — no-op lifecycle
+		// Register framework slot lifecycles. All five are simple value types
+		// with no external resources, so all four callbacks are null — the
+		// registration exists to prove the lifecycle mechanism and serve as
+		// documentation for user capabilities.
+		StateSlotRegistry.Register(1, .() { }); // Hover
+		StateSlotRegistry.Register(2, .() { }); // Press
+		StateSlotRegistry.Register(3, .() { }); // Scroll
+		StateSlotRegistry.Register(4, .() { }); // DragOffset
+		StateSlotRegistry.Register(5, .() { }); // Focus
 	}
 }
