@@ -1,12 +1,12 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Core/Color.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Behaviors/OnDrag.bf", "src/Core/Color.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
 Y = 0
-Width = 2560
+Width = 1280
 Height = 1366
 ShowKind = "ShowNormal"
 
@@ -44,7 +44,7 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Color.bf"
-TabWidth = 84.0
+TabWidth = 74.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Color.bf"

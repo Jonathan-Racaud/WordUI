@@ -34,12 +34,18 @@ public class ScrollHandlerBehavior : Behavior, IInputHandler, IHasStateSlots
 		let stack = hit.GetComponent<StackLayout>();
 		bool vertical = stack == null || stack.Axis == .Vertical;
 
+		let app = App.Instance;
+
 		// Viewport = the container's own inner box (its allocated rect minus
 		// padding). Content extent = how far the children reach past the inner
 		// origin (they are laid out at natural, unclamped positions and overflow).
+		// Layout geometry is read from the retained RenderNode so it works for
+		// paint-only frames without re-running layout.
 		float pad = hit.Padding;
-		float viewportMain = (vertical ? hit.mRect.Height : hit.mRect.Width) - 2 * pad;
-		float innerOrigin = (vertical ? hit.mRect.Y : hit.mRect.X) + pad;
+		let hitNode = app.FindNode(hit.StableKey);
+		let hitBounds = hitNode?.RenderNode?.Bounds ?? Rect(0, 0, 0, 0);
+		float viewportMain = (vertical ? hitBounds.Height : hitBounds.Width) - 2 * pad;
+		float innerOrigin = (vertical ? hitBounds.Y : hitBounds.X) + pad;
 
 		float contentEnd = innerOrigin;
 		let children = hit.GetComponent<Children>();
@@ -47,13 +53,16 @@ public class ScrollHandlerBehavior : Behavior, IInputHandler, IHasStateSlots
 		{
 			for (let child in children.Items)
 			{
-				let edge = vertical ? child.mRect.Bottom : child.mRect.Right;
+				let childNode = app.FindNode(child.StableKey);
+				let childBounds = childNode?.RenderNode?.Bounds;
+				if (childBounds == null)
+					continue;
+				let edge = vertical ? childBounds.Value.Bottom : childBounds.Value.Right;
 				contentEnd = Math.Max(contentEnd, edge);
 			}
 		}
 		float maxOffset = Math.Max(0, (contentEnd - innerOrigin) - viewportMain);
 
-		let app = App.Instance;
 		let node = app.FindNode(hit.StableKey);
 		let current = node != null ? StateSlots.Scroll.Get(node) : 0f;
 
@@ -100,11 +109,16 @@ public class ScrollHandlerBehavior : Behavior, IInputHandler, IHasStateSlots
 			return best;
 
 		Widget current = best;
-		if (x >= w.mRect.X && x < w.mRect.Right &&
-			y >= w.mRect.Y && y < w.mRect.Bottom &&
-			w.GetComponent<ScrollView>() != null)
+		let node = App.Instance.FindNode(w.StableKey);
+		let bounds = node?.RenderNode?.Bounds;
+		if (bounds != null)
 		{
-			current = w;
+			if (x >= bounds.Value.X && x < bounds.Value.Right &&
+				y >= bounds.Value.Y && y < bounds.Value.Bottom &&
+				w.GetComponent<ScrollView>() != null)
+			{
+				current = w;
+			}
 		}
 
 		let children = w.GetComponent<Children>();

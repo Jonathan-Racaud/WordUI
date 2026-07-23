@@ -35,8 +35,8 @@ public abstract class App
 
 	// Root of the retained node tree. Nodes are heap-allocated and survive
 	// rebuilds; they carry identity, parent/child relationships, generic state
-	// storage, and per-node animation clocks.
-	Node mRootNode;
+	// storage, and a retained RenderNode for layout geometry and paint invalidation.
+	protected Node mRootNode;
 
 	// O(1) StableKey → Node lookup so trackers and draw code can access
 	// persistent state without a tree walk.
@@ -134,7 +134,7 @@ public abstract class App
 	{
 		if (!mNeedsLayout || mRoot == null)
 			return false;
-		Layout.Run(available, mRoot);
+		Layout.Run(available, mRoot, mRootNode);
 		if (mRootNode != null)
 			mRootNode.ClearDirty();
 		mNeedsLayout = false;
@@ -261,6 +261,9 @@ public abstract class App
 			mNodeIndex[w.StableKey] = node;
 			isNew = true;
 		}
+
+		// RenderNodes are lazily created on first access by Layout.Run
+		// (via SetBounds) or by MarkNeedsPaint — no eager creation needed here.
 
 		// Update parent/child links (the Widget tree structure may have changed).
 		node.Parent = parent;

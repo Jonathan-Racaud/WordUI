@@ -3,18 +3,24 @@ using System;
 namespace WordUI;
 
 // Flex layout pass: constraints-down, sizes-up, sum-main/max-cross,
-// leftover→Spacer. Runs after Build(), stores a Rect on every widget.
+// leftover→Spacer. Runs after Build() and reconciliation; stores layout
+// geometry on each widget's retained Node.RenderNode.Bounds so rects survive
+// rebuilds and paint-only updates work without re-laying-out.
 static class Layout
 {
 	// Entry point: lay out the entire tree within the given rect.
-	public static void Run(Rect available, Widget root)
+	// rootNode is the retained Node for root (from App's mRootNode).
+	public static void Run(Rect available, Widget root, Node rootNode)
 	{
-		LayoutWidget(available, root);
+		LayoutWidget(available, root, rootNode);
 	}
 
-	static void LayoutWidget(Rect available, Widget widget)
+	static void LayoutWidget(Rect available, Widget widget, Node node)
 	{
-		widget.mRect = available;
+		// Write layout geometry to the retained RenderNode so it survives rebuilds
+		// and is available for paint-only invalidation.
+		if (node != null)
+			node.RenderNode.SetBounds(available);
 
 		let children = widget.GetComponent<Children>();
 		if (children == null)
@@ -88,9 +94,11 @@ static class Layout
 
 			if (child.Name == "Spacer")
 			{
-				child.mRect = isVertical
+				Rect spacerRect = isVertical
 					? Rect(inner.X, mainPos, inner.Width, spacerSize)
 					: Rect(mainPos, inner.Y, spacerSize, inner.Height);
+				let childNode = App.Instance.FindNode(child.StableKey);
+				childNode?.RenderNode.SetBounds(spacerRect);
 				mainPos += spacerSize;
 				continue;
 			}
@@ -135,7 +143,8 @@ static class Layout
 				? Rect(childCrossPos, mainPos, childCrossUsed, childMain)
 				: Rect(mainPos, childCrossPos, childMain, childCrossUsed);
 
-			LayoutWidget(childRect, child); // recurse
+			let childNode = App.Instance.FindNode(child.StableKey);
+			LayoutWidget(childRect, child, childNode); // recurse
 
 			mainPos += childMain + stack.Spacing;
 		}

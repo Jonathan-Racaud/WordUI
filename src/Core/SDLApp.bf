@@ -68,24 +68,36 @@ public abstract class SDLApp : App
 	public Color ClearColor { get => mClearColor; set => mClearColor = value; }
 
 	// Called each frame after the clear. Default walks the widget tree
-	// and draws each widget at its layout rect.
+	// and draws each widget at its layout rect. Skips subtrees whose
+	// retained RenderNode is paint-clean.
 	private void Draw()
 	{
-		DrawWidget(Root, 0, 0);
+		let rootNode = App.Instance.FindNode(Root.StableKey);
+		DrawWidget(Root, 0, 0, true, rootNode);
 	}
 
 	// (ox,oy) is the accumulated render-time offset from ancestor offsets
 	// (drag, scroll, etc.). Each component on a widget may contribute an offset
 	// via GetRenderOffset — the draw loop accumulates all of them into the
-	// child rendering origin. Zero hardcoded knowledge of specific interaction
+	// child rendering origin. No hardcoded knowledge of specific interaction
 	// types in the draw pipeline.
-	void DrawWidget(Widget w, float ox, float oy)
+	//
+	// ancestorDirty: true when any ancestor in the chain needs paint. When both
+	// ancestorDirty and the current node's RenderNode.NeedsPaint are false, the
+	// entire subtree is paint-clean and skipped.
+	void DrawWidget(Widget w, float ox, float oy, bool ancestorDirty, Node node)
 	{
 		if (w == null)
 			return;
 
-		let app = App.Instance;
-		let node = app.FindNode(w.StableKey);
+		// Paint-dirty subtree skip: if no ancestor is dirty and this node's
+		// RenderNode reports clean, the entire subtree can be skipped. This is
+		// safe because ClearPaintDirty() later does a full recursive clear
+		// regardless of what was drawn.
+		let rn = node?.RenderNode;
+		bool thisDirty = ancestorDirty || (rn != null && rn.NeedsPaint);
+		if (!thisDirty)
+			return;
 
 		// Accumulate render offsets from every component on this widget.
 		var tx = ox;
@@ -97,7 +109,11 @@ public abstract class SDLApp : App
 			ty += coy;
 		}
 
-		Rect bounds = .(w.mRect.X + tx, w.mRect.Y + ty, w.mRect.Width, w.mRect.Height);
+		// Read layout geometry from the retained RenderNode so rects survive
+		// rebuilds and paint-only updates don't need re-layout.
+		Rect bounds = rn != null
+			? .(rn.Bounds.X + tx, rn.Bounds.Y + ty, rn.Bounds.Width, rn.Bounds.Height)
+			: .(tx, ty, 0, 0);
 
 		// 1. Background — fills behind everything (Interior)
 		for (let c in w.Components)
@@ -118,7 +134,10 @@ public abstract class SDLApp : App
 		if (children != null)
 		{
 			for (let child in children.Items)
-				DrawWidget(child, childOx, childOy);
+			{
+				let childNode = App.Instance.FindNode(child.StableKey);
+				DrawWidget(child, childOx, childOy, thisDirty, childNode);
+			}
 		}
 
 		if (clip)
@@ -140,9 +159,10 @@ public abstract class SDLApp : App
 	public void Run()
 	{
 		RebuildIfNeeded();
-		Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
+		Layout.Run(Rect(0, 0, mWidth, mHeight), Root, mRootNode);
 		DumpTree();
 		Render();
+		mRootNode?.ClearPaintDirty();
 
 		bool quit = false;
 		SDL_Event event = .();
@@ -180,8 +200,10 @@ public abstract class SDLApp : App
 
 			if (RebuildIfNeeded())
 			{
-				Layout.Run(Rect(0, 0, mWidth, mHeight), Root);
+				Layout.Run(Rect(0, 0, mWidth, mHeight), Root, mRootNode);
 				Render();
+				// Layout's SetBounds marks every node paint-dirty; clear after render.
+				mRootNode?.ClearPaintDirty();
 			}
 			else if (LayoutIfNeeded(Rect(0, 0, mWidth, mHeight)))
 			{
@@ -191,6 +213,9 @@ public abstract class SDLApp : App
 			{
 				Render();
 				ClearRepaint();
+				// Clear per-node paint-dirty flags after paint-only pass.
+				// After a full rebuild, ClearDirty() handles this via LayoutIfNeeded.
+				mRootNode?.ClearPaintDirty();
 			}
 		}
 	}

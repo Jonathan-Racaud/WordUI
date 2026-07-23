@@ -193,8 +193,14 @@ class InputDispatcher : ITracker
 		if (w == null)
 			return false;
 
-		bool hit = x >= w.mRect.X && x < w.mRect.Right &&
-				   y >= w.mRect.Y && y < w.mRect.Bottom;
+		bool hit = false;
+		let node = App.Instance.FindNode(w.StableKey);
+		let bounds = node?.RenderNode?.Bounds;
+		if (bounds != null)
+		{
+			hit = x >= bounds.Value.X && x < bounds.Value.Right &&
+				  y >= bounds.Value.Y && y < bounds.Value.Bottom;
+		}
 
 		let children = w.GetComponent<Children>();
 		bool childHit = false;

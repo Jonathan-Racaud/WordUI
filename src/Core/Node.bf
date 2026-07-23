@@ -5,9 +5,9 @@ namespace WordUI;
 
 // The retained runtime element: a long-lived, heap-allocated node that persists
 // across rebuilds. While Widgets are transient descriptions rebuilt every frame,
-// Nodes provide stable identity, tree structure, lifecycle, and generic per-node
-// state storage that capabilities (hover, press, scroll, animation) write into
-// and read from.
+// Nodes provide stable identity, tree structure, lifecycle, generic per-node
+// state storage, and a retained RenderNode for layout geometry and paint
+// invalidation.
 //
 // Node knows NOTHING about what any state slot means. Slot constants are defined
 // by the capabilities that use them (framework reserves 1..99; user capabilities
@@ -24,6 +24,10 @@ namespace WordUI;
 // node creation, reuse, state cleanup, and disposal via the StateSlotRegistry.
 // Node itself knows nothing about what any lifecycle callback does — it only
 // fires them at the right reconciliation points.
+//
+// Retained render state (layout geometry, paint-dirty) lives on the RenderNode
+// attached to each Node, not here. This keeps the Node focused on identity,
+// state storage, and lifecycle.
 public class Node
 {
 	public int StableKey;
@@ -62,18 +66,31 @@ public class Node
 
 	// ---- Invalidation flags ----
 	// Per-node dirty tracking for partial invalidation. When a capability writes
-	// state that affects layout or paint, it calls MarkNeedsLayout() or
-	// MarkNeedsPaint() on the affected node. The flag propagates up to root so
-	// the framework can find dirty subtrees in a single root→leaf walk without
-	// knowing what capability caused the invalidation.
+	// state that affects layout, it calls MarkNeedsLayout() on the affected node.
+	// The flag propagates up to root so the framework can find dirty subtrees in
+	// a single root→leaf walk. Paint-dirty lives on RenderNode (retained render layer).
 	bool mNeedsLayout;
-	bool mNeedsPaint;
 
 	// True if this node or any descendant needs layout.
 	public bool HasLayoutDirty => mNeedsLayout;
 
-	// True if this node or any descendant needs paint.
-	public bool HasPaintDirty => mNeedsPaint;
+	// ---- Retained render layer ----
+
+	// The retained RenderNode owns layout geometry (Bounds) and paint-dirty
+	// tracking. Created lazily on first access so nodes that never participate
+	// in layout/rendering don't allocate one.
+	RenderNode mRenderNode;
+
+	// Lazy get-or-create accessor. Triggers heap allocation on first call.
+	public RenderNode RenderNode
+	{
+		get
+		{
+			if (mRenderNode == null)
+				mRenderNode = new RenderNode(this);
+			return mRenderNode;
+		}
+	}
 
 	public this(int key)
 	{
@@ -134,7 +151,7 @@ public class Node
 		SetState(slot, Variant.Create(value));
 	}
 
-	// ---- Invalidation ----
+	// ---- Layout invalidation ----
 
 	// Mark this node's subtree as needing layout. Propagates up the parent
 	// chain so the framework can discover dirty subtrees from the root.
@@ -148,15 +165,12 @@ public class Node
 			Parent.MarkChildLayoutDirty();
 	}
 
-	// Mark this node's subtree as needing paint. Same parent-chain propagation
-	// as MarkNeedsLayout, so draw walks can skip clean subtrees.
+	// Convenience: mark this node's retained RenderNode as paint-dirty.
+	// Delegates to RenderNode.MarkNeedsPaint() which handles parent-chain
+	// propagation. The RenderNode is lazily created if it doesn't exist yet.
 	public void MarkNeedsPaint()
 	{
-		if (mNeedsPaint)
-			return;
-		mNeedsPaint = true;
-		if (Parent != null)
-			Parent.MarkChildPaintDirty();
+		RenderNode.MarkNeedsPaint();
 	}
 
 	// Called by a child when it becomes layout-dirty. Propagates upward.
@@ -169,22 +183,12 @@ public class Node
 			Parent.MarkChildLayoutDirty();
 	}
 
-	// Called by a child when it becomes paint-dirty. Propagates upward.
-	void MarkChildPaintDirty()
-	{
-		if (mNeedsPaint)
-			return;
-		mNeedsPaint = true;
-		if (Parent != null)
-			Parent.MarkChildPaintDirty();
-	}
-
 	// Recursively clear all dirty flags in this subtree. Called after the
-	// framework has processed the invalidation (layout or paint pass).
+	// framework has processed the invalidation (layout pass).
 	public void ClearDirty()
 	{
 		mNeedsLayout = false;
-		mNeedsPaint = false;
+		RenderNode?.ClearPaintDirty();
 		for (let child in Children)
 			child.ClearDirty();
 	}
@@ -193,9 +197,7 @@ public class Node
 	// a paint-only pass so pending layout work isn't lost.
 	public void ClearPaintDirty()
 	{
-		mNeedsPaint = false;
-		for (let child in Children)
-			child.ClearPaintDirty();
+		RenderNode?.ClearPaintDirty();
 	}
 
 	// ---- Tick dispatch ----
@@ -321,11 +323,12 @@ public class Node
 	// Dispose this node's own resources. Snapshot-deletes all registered
 	// tickables (each destructor unregisters itself), then fires OnDispose for
 	// every state slot still holding data so capabilities can release external
-	// resources (timers, native handles, subscriptions). Children are NOT
-	// recursively disposed here: the orphan loop in App.ReconcileTree disposes
-	// every orphaned Node individually. A reused child is reattached via
-	// ReconcileWidget, which calls Children.Clear() first to drop the old
-	// reference. Recursing here would double-free orphaned children.
+	// resources (timers, native handles, subscriptions). Finally disposes the
+	// retained RenderNode. Children are NOT recursively disposed here: the
+	// orphan loop in App.ReconcileTree disposes every orphaned Node individually.
+	// A reused child is reattached via ReconcileWidget, which calls
+	// Children.Clear() first to drop the old reference. Recursing here would
+	// double-free orphaned children.
 	public void Dispose()
 	{
 		// Delete tickables first (each destructor unregisters from mTickables).
@@ -344,6 +347,15 @@ public class Node
 			if (lc.OnDispose != null)
 				lc.OnDispose(this, pair.key);
 		}
+
+		// Dispose the retained RenderNode (layout geometry, resource cache).
+		if (mRenderNode != null)
+		{
+			mRenderNode.Dispose();
+			delete mRenderNode;
+			mRenderNode = null;
+		}
+
 		Children.Clear();
 	}
 

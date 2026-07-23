@@ -13,7 +13,8 @@ public sealed class Widget
 	public int Key = -1;      // optional user identity hint (list items); feeds StableKey
 	public float Padding;
 	public int StableKey;     // persistent identity across rebuilds; assigned by KeyAssign post-build
-	public Rect mRect;        // assigned by the layout pass; transient (freed with arena)
+	// Layout geometry (Rect) now lives on the retained Node.RenderNode.Bounds
+	// and survives rebuilds — no transient mRect on Widget.
 
 	List<Component> mComponents;
 	List<Property> mProperties;

@@ -72,8 +72,14 @@ extension App
 		if (!props.IsEmpty) props.Append(' ');
 		props.AppendF(scope $" Key={w.Key}");
 
-		if (!props.IsEmpty) props.Append(' ');
-		props.Append(scope $" Rect=({w.mRect.X},{w.mRect.Y}, {w.mRect.Width}x{w.mRect.Height})");
+		// Read layout geometry from the retained RenderNode (survives rebuilds).
+		let node = App.Instance.FindNode(w.StableKey);
+		let bounds = node?.RenderNode?.Bounds;
+		if (bounds != null)
+		{
+			if (!props.IsEmpty) props.Append(' ');
+			props.Append(scope $" Rect=({bounds.Value.X},{bounds.Value.Y}, {bounds.Value.Width}x{bounds.Value.Height})");
+		}
 
 		if (!props.IsEmpty)
 			line.Append(scope $"{props}");
