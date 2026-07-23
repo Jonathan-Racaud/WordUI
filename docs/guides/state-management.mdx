@@ -68,7 +68,7 @@ re-runs only the paint pass on the existing tree.
 
 The interaction cycle:
 
-1. User presses mouse-down on a button → `PressTracker` sets the pressed flag in the persistent `InteractionStore`, keyed by the widget's `StableKey`, and calls `RequestRepaint()`
+1. User presses mouse-down on a button → `PressTracker` sets the pressed flag on the retained `Node` (via `node.SetBool(PressTracker.SlotPress, true)`), keyed by the widget's `StableKey`, and calls `RequestRepaint()`
 2. Paint pass re-runs → `StyleResolve` sees the `PressState` patch as active → highlighted button is drawn (no rebuild, no layout)
 3. User releases mouse → `PressTracker` clears the flag and fires the `OnClick` handler → the handler calls `Invalidate()`
 4. Now the tree rebuilds — but because app data (`mCount`) changed, not because of the press

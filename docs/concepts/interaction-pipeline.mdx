@@ -1,14 +1,14 @@
 ---
 title: Interaction Pipeline
-description: The draw-time-resolved interaction model — stable keys, a persistent store, state patches, transitions, and drag
+description: The draw-time-resolved interaction model — stable keys, a retained Node tree, state patches, transitions, and drag
 ---
 
 Interaction in WordUI — press, hover, drag, and animation — is **event-driven and resolved
 at draw time**, not by rebuilding the tree per state change. A state body like `IfHover`
 always runs during `Build()`, but instead of mutating base components it records a
 field-level **patch**; the draw pass blends the active patches over the base values, field
-by field. Interaction state, animation clocks, and drag capture live in a **persistent
-store** that outlives the build arena, so a hover fade at `t=0.1s` keeps running even when
+by field. Interaction state, animation clocks, and drag capture live in a **retained Node
+tree** that outlives the build arena, so a hover fade at `t=0.1s` keeps running even when
 app data changes and the tree is torn down and rebuilt.
 
 This replaces the earlier busy-poll, rebuild-per-state model. The result is ~0% idle CPU
@@ -25,19 +25,55 @@ is the author's `Key()` hint when set (e.g. a list-item index) or the sibling or
 otherwise.
 
 The same logical widget gets the same key across rebuilds as long as the build structure is
-stable, so the store re-associates its state after a rebuild. This is what structurally
+stable, so the Node tree re-associates its state after a rebuild. This is what structurally
 fixes the dangling-pointer missed/delayed clicks the old positional `BuildIndex` scheme had.
 
-## The persistent store: `InteractionStore`
+## The retained Node tree
 
-`InteractionStore` (in `src/Core/InteractionStore.bf`) is owned by `App` and **not** part of
-the build arena, so it survives every rebuild. It holds, all keyed by `StableKey`:
+After each build, `App.ReconcileTree()` walks the freshly-built Widget tree and matches it
+against the existing retained `Node` tree by `StableKey` (see `src/Core/Node.bf`). Matched
+Nodes are **reused** — their persistent state (hover, press, scroll offset, animation
+clocks) survives the rebuild. New Nodes are created and indexed; orphaned Nodes (keys that
+existed before but not in the new build) are disposed.
 
-- **Hover / press booleans** — set by the trackers, queried by state properties at draw.
-- **Animation clocks** — one per `(widget, stateId)`, an eased progress `p ∈ [0,1]` that
+Each `Node` carries:
+
+- **Identity** — the `StableKey` and `Parent`/`Children` links forming a tree parallel to
+  the Widget tree.
+- **Generic state storage** — a `Dictionary<int, Variant>` where each capability
+  (hover tracker, press tracker, scroll tracker) writes and reads its own slot. A
+  `Variant` stores small types (bool, int, float) inline with zero allocation.
+  Framework reserves slots 1–99; user capabilities pick ≥ 100.
+- **Animation clocks** — per `(Node, stateId)`, an eased progress `p ∈ [0,1]` that
   advances toward `1` while the state is active and toward `0` while inactive, so
-  interrupting or reversing a transition mid-flight stays smooth.
-- **Drag capture** — the currently-captured key plus its accumulated offset.
+  interrupting or reversing a transition mid-flight stays smooth. Clocks self-prune
+  when settled at 0.
+
+This is the evolution of the earlier flat `InteractionStore` (deleted in the architectural
+refactor): instead of separate per-type dictionaries in a monolithic store, state now lives
+directly on the retained element that owns it, forming a tree that mirrors the widget
+hierarchy.
+
+### Trackers write to Node state
+
+Each tracker defines its own slot constant and writes directly to the retained `Node`:
+
+- **HoverTracker** — slot `1` (`HoverTracker.SlotHover`): sets a bool on the hovered
+  widget's Node via `node.SetBool(SlotHover, true/false)`.
+- **PressTracker** — slot `2` (`PressTracker.SlotPress`): sets a bool on the pressed
+  widget's Node.
+- **ScrollTracker** — slot `3` (`ScrollTracker.SlotScroll`): stores a float scroll offset
+  on the scrolled widget's Node.
+
+State properties (`PressState`, `HoverState`) query the Node at draw time via
+`App.Instance.FindNode(ownerKey)?.GetBool(slot)` instead of a monolithic store.
+Animation clocks live per-Node via `node.Blend(stateId, active, durationMs, curve)` —
+called by `StyleResolve` at draw — and a single `App.TickAll(nowMs)` advances every clock
+in the tree.
+
+Drag capture state (key, accumulated offset, last position) is per-pointer-session, not
+per-widget, so it lives directly on `App` (`BeginDrag`/`UpdateDrag`/`EndDrag`/`DragOffset`)
+rather than in the Node tree.
 
 ## State bodies record patches
 
@@ -83,7 +119,7 @@ let fill = StyleResolve.Color(widget, baseFill, .Fill);
 
 For each recorded patch that touches the requested field, the resolver asks the gating state
 `IsActiveFor(widget.StableKey)`. For a non-animated field the blend factor is `1` (active)
-or `0` (inactive); for an animated field it's the eased clock value from the store. The
+or `0` (inactive); for an animated field it's the eased clock value from the Node. The
 resolver `Lerp`s the running result toward the patch's target by that factor, so multiple
 active patches blend in sequence — concurrent states compose field by field.
 
@@ -103,14 +139,14 @@ IfHover(scope () => {
 
 `Transition(ms, body)` defaults to `.EaseInOut`; an overload takes an explicit `Easing`
 (`Linear`, `EaseInOut`, `Spring`). The animated field interpolates via the persistent clock
-in the store, which is exactly what lets a transition **survive a rebuild** and keep the
+in the Node, which is exactly what lets a transition **survive a rebuild** and keep the
 frame loop ticking until it settles. Outside a state body, `Transition` is a transparent
 pass-through.
 
 ## Drag
 
 `OnDrag` makes the stack-top widget draggable. On press over it, `DragTracker` begins a
-**pointer capture** in the store keyed by `StableKey`; while captured, all motion routes to
+**pointer capture** on `App` keyed by `StableKey`; while captured, all motion routes to
 that widget's handler regardless of what the pointer is over. The handler receives the
 incremental delta each move:
 
@@ -127,9 +163,9 @@ the same tracker seam.
 
 Because interaction is resolved at draw, the frame loop doesn't need to spin. When nothing is
 happening it **blocks in `SDL_WaitEvent`** — true ~0% idle CPU. While a transition or drag is
-in flight (`InteractionStore.NeedsTick`), it switches to a ~16ms `SDL_WaitEventTimeout` frame
+in flight (`App.NeedsTick`), it switches to a ~16ms `SDL_WaitEventTimeout` frame
 clock so animation advances smoothly. After each wake it processes input, advances the
-animation clocks (`Store.Tick`), then:
+animation clocks (`App.TickAll`), then:
 
 - **rebuilds + lays out** only if app data changed (`mDirty`, set by `Invalidate()`), or
 - **repaints only** if a visual-only change happened (`mNeedsRepaint`, set by
@@ -147,7 +183,7 @@ Any `Property` that implements `IInteractionState` can power a conditional state
 public class FocusState : Property, IInteractionState
 {
     public int StateId => 3;   // stable, unique small int (framework reserves 1..99)
-    public bool IsActiveFor(int ownerKey) => App.Instance.Store.IsFocused(ownerKey);
+    public bool IsActiveFor(int ownerKey) => App.Instance.FindNode(ownerKey)?.GetBool(slot) == true;
     public override void Describe(String buf) => buf.Append(" focus");
 }
 
@@ -159,4 +195,4 @@ extension UI
 
 `StateId` must be stable and unique per state type — it keys the animation clock so a
 transition keeps its progress across rebuilds. `IsActiveFor` reads whatever tracker in the
-`InteractionStore` owns that state's boolean.
+`App.Instance.FindNode` owns that state's boolean.

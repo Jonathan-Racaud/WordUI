@@ -78,7 +78,7 @@ The key pattern, intentionally simple:
 ```
 src/
 ├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, InputEvent, Rect, Size, Color, Primitives
-│                  #   + interaction pipeline: KeyAssign (StableKey), InteractionStore, Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker
+│                  #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker, ScrollTracker
 ├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout
 ├── Properties/    # Pure data: TextStyleProperty, LayoutHint (+ CrossAlignment, SizingConstraints), PressState/HoverState (+ IInteractionState), StatePatch/InteractionStyle
 ├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler), OnDragBehavior (+ DragHandler)

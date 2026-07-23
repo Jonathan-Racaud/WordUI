@@ -135,7 +135,7 @@ VStack(scope () => {
 
 A `Scrollable` is a stack that carries a `ScrollView` component, so the mouse wheel scrolls
 its children and the scroll offset survives rebuilds (it lives in the persistent
-[`InteractionStore`](/concepts/interaction-pipeline) keyed by `StableKey`). It is vertical by
+[retained `Node` tree](/concepts/interaction-pipeline) keyed by `StableKey`). It is vertical by
 default; set the axis with `Horizontal()`/`Vertical()`.
 
 It does **not** clip on its own — clipping is a separate composable capability. Give it a

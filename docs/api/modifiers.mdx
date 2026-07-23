@@ -118,7 +118,7 @@ Label(scope:: $"Item {i}"); Key(i);
 Sets a stable identity hint on the stack-top widget. `KeyAssign` feeds this hint (when `>= 0`,
 e.g. a list-item index) into each widget's `StableKey` path hash as its discriminator instead
 of the sibling ordinal, so dynamic children keep a stable identity for the persistent
-[`InteractionStore`](/concepts/interaction-pipeline) across rebuilds.
+[retained `Node` tree](/concepts/interaction-pipeline) across rebuilds.
 
 ## Cross-axis alignment
 

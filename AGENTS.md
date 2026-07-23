@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-WordUI is an experimental **concatenative UI framework** for the [Beef](https://www.beeflang.org/) language. It captures the essence of Factor's UI vocabulary — a sequence of **words** operating on an implicit widget stack — inside an applicative language without building an interpreter. The project is in early development: it renders a real SDL3 GUI (flex layout, text, mouse input) with a draw-time interaction pipeline (press/hover highlights, `Transition` animation, `OnDrag`) over a persistent, rebuild-surviving `InteractionStore`. A console tree dump remains available as a diagnostic.
+WordUI is an experimental **concatenative UI framework** for the [Beef](https://www.beeflang.org/) language. It captures the essence of Factor's UI vocabulary — a sequence of **words** operating on an implicit widget stack — inside an applicative language without building an interpreter. The project is in early development: it renders a real SDL3 GUI (flex layout, text, mouse input) with a draw-time interaction pipeline (press/hover highlights, `Transition` animation, `OnDrag`) over a persistent, rebuild-surviving retained `Node` tree. A console tree dump remains available as a diagnostic.
 
 ---
 
@@ -16,7 +16,7 @@ README.md                  # Quick-start, build instructions, status
 plans/                     # Per-session planning docs and brainstorming notes
 src/
 ├── Core/                  # Foundation: Widget (sealed, 3 bags), App, UI (stack + ops), Component/Property/Behavior base classes, Color, Children, StackItem, Primitives, Rect, Size, Layout, Painter, HitTest, InputEvent, SDLApp
-│                          #   + interaction pipeline: KeyAssign (StableKey), InteractionStore, Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker
+│                          #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker, ScrollTracker
 ├── Components/            # Pipeline participants (Component bag): TextComponent, Interior, Boundary, StackLayout, Children
 ├── Properties/            # Pure data (Property bag) + their setter words: TextStyleProperty/TextColor/FontSize, LayoutHint/Center/Align/Width/Height, PressState/HoverState (IInteractionState), StatePatch/InteractionStyle
 ├── Behaviors/             # Event handlers (Behavior bag): OnClickBehavior/OnClick, OnDragBehavior/OnDrag

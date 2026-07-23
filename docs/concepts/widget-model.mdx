@@ -65,13 +65,13 @@ Properties have no `Measure`, no draw hooks, no event dispatch — they're queri
 |---|---|---|
 | `TextStyleProperty` | `FontSize`, `TextColor` | `TextComponent` (Measure + DrawContent), modifier words |
 | `LayoutHint` | `CrossAlign`, `Width`, `Height` | Layout pass |
-| `PressState` | `IInteractionState` → `Store.IsPressed(key)` | `IfActive<T>` / `IfPressed` patch recording |
-| `HoverState` | `IInteractionState` → `Store.IsHovered(key)` | `IfActive<T>` / `IfHover` patch recording |
+| `PressState` | `IInteractionState` → `FindNode(key).GetBool(SlotPress)` | `IfActive<T>` / `IfPressed` patch recording |
+| `HoverState` | `IInteractionState` → `FindNode(key).GetBool(SlotHover)` | `IfActive<T>` / `IfHover` patch recording |
 | `InteractionStyle` | the widget's list of recorded `StatePatch` deltas | `StyleResolve` at draw time |
 
 `PressState` and `HoverState` are **interaction states**: `Property` subclasses that
 implement `IInteractionState` and report, for a `StableKey`, whether they're active by
-reading the persistent `InteractionStore`. `InteractionStyle` carries the field-level
+reading the retained `Node` tree. `InteractionStyle` carries the field-level
 patches a state body records. See the [Interaction Pipeline](/concepts/interaction-pipeline)
 for how these compose at draw.
 

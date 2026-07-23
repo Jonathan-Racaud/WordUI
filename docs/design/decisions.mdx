@@ -120,16 +120,24 @@ rebuild path (decision 4).
 
 ---
 
-## 8. Persistent `InteractionStore` keyed by `StableKey`
+## 8. Persistent retained `Node` tree keyed by `StableKey`
 
-Interaction state, animation clocks, and drag capture live in an `InteractionStore` owned by
-`App`, outside the build arena, so they survive every rebuild. All of it is keyed by
-`Widget.StableKey`, never a `Widget*`.
+Interaction state, animation clocks, and drag capture live in a retained `Node` tree owned by
+`App`, outside the build arena, so they survive every rebuild. The tree mirrors the widget
+hierarchy: each `Node` carries a `StableKey`, parent/child links, a generic
+`Dictionary<int, Variant>` for capability-owned state (framework slots 1–99, user slots ≥ 100),
+and per-state animation clocks that self-prune when settled. After each build,
+`ReconcileTree()` matches the new Widget tree against the existing Node tree by `StableKey`:
+matched Nodes are reused (state persists), new ones are created, and orphaned ones are
+disposed. Drag capture state is per-pointer-session and lives directly on `App`.
 
 **Why:** An animation in flight (a hover fade at `t=0.1s`) must keep running when unrelated
 app data changes and the tree is rebuilt. A `Widget*` can't be the key — the arena frees it
 on rebuild, which is exactly the dangling pointer that caused missed/delayed clicks. A stable
-key re-associates state with the same logical widget after a rebuild.
+key re-associates state with the same logical widget after a rebuild. Moving from a flat
+`InteractionStore` to a tree of Nodes makes state local to the element that owns it, gives
+it a natural lifecycle (parent/child → dispose), and lets capabilities define their own slots
+without a central registry.
 
 ---
 
@@ -150,7 +158,7 @@ without colliding with computed path hashes.
 
 The frame loop blocks in `SDL_WaitEvent` when nothing is happening (true ~0% idle CPU) and
 switches to a ~16ms `SDL_WaitEventTimeout` frame clock only while a transition or drag is live
-(`InteractionStore.NeedsTick`).
+(`App.NeedsTick`).
 
 **Why:** A UI framework has no reason to burn CPU when the user isn't doing anything, but
 animation still needs a steady clock. Draw-time resolution (decision 7) makes both possible

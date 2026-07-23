@@ -135,7 +135,7 @@ tree for each would be wasteful and — before the split — caused missed click
 dangling `Widget*` a freed arena left behind.
 
 Instead, press/hover/drag and animation all call `RequestRepaint()`. Their state lives in
-the persistent [`InteractionStore`](/concepts/interaction-pipeline) (keyed by `StableKey`, not
+the persistent retained [`Node` tree](/concepts/interaction-pipeline) (keyed by `StableKey`, not
 a `Widget*`), and the visual change is resolved at draw by blending recorded style patches
 over the base values. The existing tree survives across these frames; only a real app-data
 change (`Invalidate()`) triggers a rebuild.

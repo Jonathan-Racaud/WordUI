@@ -42,5 +42,4 @@ BeefBuild
 ./build/Debug_Linux64/WordUI/WordUI
 ```
 
-Status: early experiment — word vocabulary, modifiers, styling, SDL3 rendering, hit-test, and
-click dispatch all working. Interaction states, scroll, and text input upcoming.
+Status: early experiment — word vocabulary, modifiers, styling, alignment + sizing constraints, SDL3 rendering, hit-test, click dispatch, press/hover interaction states with animated transitions, drag with pointer capture, and scrollable containers all working. Text input and focus are upcoming.

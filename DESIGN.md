@@ -189,7 +189,7 @@ Button("+"); {
 
 `IfActive<T>` where `T : Property, IInteractionState` get-or-creates a `Property` on the
 stack-top widget, then runs the body only when `T.IsActive` is true. `PressState`
-implements `IInteractionState` by querying `PressTracker.IsPressed(buildIndex)`. The
+implements `IInteractionState` by querying `App.Instance.FindNode(ownerKey)?.GetBool(PressTracker.SlotPress)`. The
 pattern is rebuild-safe: on the first build the `PressState` property is created; on
 subsequent rebuilds `GetProperty<T>` finds it and reuses it. The `IsActive` query returns
 false when the widget isn't being pressed, so the highlight body doesn't run — the widget
@@ -228,16 +228,19 @@ outlive what it references.
 **Now:** state = plain Beef fields; UI = f(state); reactivity = `Invalidate()`. No
 diffing, no observers. `IfActive<T>` handles interaction-state-driven conditional build
 without triggering extra rebuilds — the body runs or doesn't run during the normal build
-cycle, and `PressTracker` state is queried inline.
+cycle, and tracker state is read from the retained `Node` tree at draw.
 
 **Growth path, only when measurably needed:** memoized subtrees (needs widget identity);
 Factor-style `Model<T>` observables + `Bind` (retained-mode vocabulary; only if
 whole-tree rebuild proves too slow).
 
 **Widget identity is the known hard problem.** Scroll offset, caret, focus, and animation
-progress cannot live in rebuilt widgets. Standard fix: stable ID (parent path + call
-order + optional `Key`) into a persistent side table. The `Key` word exists today so the
-slot is designed in; the side table comes with the first stateful widget.
+progress cannot live in rebuilt widgets. The solution is the retained `Node` tree
+(`src/Core/Node.bf`): a heap-allocated tree that survives rebuilds, carrying identity
+(`StableKey`), parent/child links, generic per-node state storage (`Dictionary<int, Variant>`),
+and per-state animation clocks. After each build, `ReconcileTree()` matches the new Widget
+tree against the existing Node tree by `StableKey`; matched Nodes are reused (state persists),
+new ones are created, and orphans are disposed. This is the side table grown into a tree.
 
 ## Deferred
 
@@ -258,10 +261,10 @@ core/widgets split (mechanical later, thanks to cross-project extensions).
 
 | Path | Contents |
 |---|---|
-| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver), `SDLApp`, `Painter`, `Layout`, `HitTest`, `PressTracker`, `InputEvent`, `Rect`, `Size`, `Primitives` |
+| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver + retained Node tree), `Node` (retained runtime elements), `SDLApp`, `Painter`, `Layout`, `HitTest`, `KeyAssign`, `Interaction` (IfActive/Transition), `StyleResolve`, `Easing`, `HoverTracker`, `PressTracker`, `DragTracker`, `ScrollTracker`, `InputEvent`, `Rect`, `Size`, `Primitives` |
 | `src/Components/` | `TextComponent`, `Interior` (fill), `Boundary` (stroke), `StackLayout` (+ `Axis`) |
-| `src/Properties/` | `TextStyleProperty`, `LayoutHint` (+ `CrossAlignment`, `SizingConstraints`), `PressState` (+ `IInteractionState`) |
-| `src/Behaviors/` | `OnClickBehavior` (+ `ClickHandler`) |
+| `src/Properties/` | `TextStyleProperty`, `LayoutHint` (+ `CrossAlignment`, `SizingConstraints`), `PressState`, `HoverState` (+ `IInteractionState`), `StatePatch`, `InteractionStyle` |
+| `src/Behaviors/` | `OnClickBehavior` (+ `ClickHandler`), `OnDragBehavior` (+ `DragHandler`) |
 | `src/Widgets/` | words only: `Label`, `Button`, `Stack` (HStack/VStack trios), `Spacer` |
 | `src/Modifiers/` | `Layout` (Padding, Spacing), `Styling` (Background/Border pens + Fill/Stroke/Radius/StrokeWidth), `Text` (TextColor, FontSize), `Identity` (Key), `Alignment` (Center, AlignStart, AlignEnd, AlignStretch, Width, Height, FixedSize) |
 | `src/Handlers/` | `OnClick` (get-or-create OnClickBehavior) |

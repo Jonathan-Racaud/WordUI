@@ -135,7 +135,7 @@ widget, then runs the body with a fresh `StatePatch` as the recording target. St
 that fire inside record their field onto the patch instead of touching the base; the patch is
 tagged with its gating state and stored on the widget's `InteractionStyle`. At draw,
 `StyleResolve` asks the state `IsActiveFor(widget.StableKey)` (reading the persistent
-`InteractionStore`) and blends the active patches over the base values, field by field.
+`Node` tree) and blends the active patches over the base values, field by field.
 
 This is why press and hover no longer rebuild the tree — they call `RequestRepaint()`, and
 the changed look is resolved at draw. It's also why concurrent states **compose**: a
