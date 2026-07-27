@@ -131,7 +131,7 @@ and per-state animation clocks that self-prune when settled. After each build,
 matched Nodes are reused (state persists), new ones are created, and orphaned ones are
 disposed. After reconciliation, stale state slots and clocks are pruned from reused Nodes:
 any key not referenced by the current widget's `IInteractionState` properties (or the
-framework-reserved set `StateSlots.FrameworkIds`) is removed, preventing unbounded growth.
+framework-reserved set) is removed, preventing unbounded growth.
 Drag capture state is per-pointer-session and lives directly on `App`.
 
 **Why:** An animation in flight (a hover fade at `t=0.1s`) must keep running when unrelated

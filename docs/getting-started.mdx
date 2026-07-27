@@ -5,14 +5,14 @@ description: Build, run, and understand your first WordUI application
 
 ## Prerequisites
 
-- [Beef toolchain](https://www.beeflang.org/) (`BeefBuild` on your PATH)
+- [Beef toolchain](https://www.beeflang.org/) (`BeefBuild` on your PATH; or use `build` from the project's devenv)
 - SDL3 development libraries (installed via your system package manager or the project's Nix/devenv environment)
 
 ## Build & run
 
 ```sh
 # From the workspace root
-BeefBuild
+build
 
 # Run the counter demo
 ./build/Debug_Linux64/WordUI/WordUI
@@ -78,12 +78,14 @@ The key pattern, intentionally simple:
 ```
 src/
 ├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, InputEvent, Rect, Size, Color, Primitives
-│                  #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, HoverTracker, DragTracker, PressTracker, ScrollTracker
-├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout
+│                  #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, InputDispatcher, ITracker, IInputHandler, PointerCapture
+│                  #   + tick/animation: ITickable, AnimationState (per-Node eased-progress clocks)
+├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout, Children, ClipRegion, ScrollView, RenderDragOffset
 ├── Properties/    # Pure data: TextStyleProperty, LayoutHint (+ CrossAlignment, SizingConstraints), PressState/HoverState (+ IInteractionState), StatePatch/InteractionStyle
-├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler), OnDragBehavior (+ DragHandler)
-├── Widgets/       # Word definitions: Label, Button, Stack, Spacer
-├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment, Sizing, Styling (pen blocks)
+├── Behaviors/     # Event handlers: OnClickBehavior (+ ClickHandler), OnDragBehavior (+ DragHandler), ScrollHandlerBehavior (+ ScrollHandler), KeyboardHandler (+ KeyHandler), FocusHandler
+│                  #   + input handlers: PressHandler, HoverHandler, DragHandlerBehavior, ScrollHandlerBehavior, FocusHandler, KeyboardHandler
+├── Widgets/       # Word definitions: Label, Button, Stack, Spacer, Scrollable
+├── Modifiers/     # Modifier words: Padding, Spacing, TextColor, FontSize, Alignment, Sizing, Styling (pen blocks), Clip, Vertical/Horizontal
 ├── Diagnostics/   # Diagnostics words: PrintStack, DumpTree
 └── Program.bf     # Entry point, counter demo, negative-test harnesses
 ```

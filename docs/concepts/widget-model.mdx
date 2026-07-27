@@ -55,6 +55,9 @@ Current framework components:
 - `Boundary` — strokes the widget's bounds (`DrawOverlay`)
 - `Children` — makes a widget a container (holds the child list)
 - `StackLayout` — container axis and spacing, queried by the layout pass
+- `ClipRegion` — signals that children should be clipped to bounds (used by `Clip()`)
+- `ScrollView` — signals a scrollable container; `GetRenderOffset` applies scroll offset
+- `RenderDragOffset` — contributes accumulated drag offset via `GetRenderOffset`
 
 ## Property
 
@@ -78,13 +81,18 @@ for how these compose at draw.
 ## Behavior
 
 `Behavior` is an `abstract class` for event handlers. Also has only `Describe(String)`. Behaviors
-are iterated by the input system during event dispatch — `PressTracker` walks the hit-test
-chain, finds widgets with `OnClickBehavior`, and fires the handler.
+are iterated by the input system during event dispatch — `PressHandler` handles clicks,
+`HoverHandler` tracks hover, `DragHandlerBehavior` manages drag with pointer capture,
+`ScrollHandlerBehavior` handles mouse-wheel scrolling, `FocusHandler` manages keyboard focus,
+and `KeyboardHandler` fires key events on the focused widget.
 
 | Behavior | What it holds | Who reads it |
 |---|---|---|
-| `OnClickBehavior` | `ClickHandler Handler` delegate | `PressTracker` on mouse-up |
-| `OnDragBehavior` | `DragHandler Handler` delegate | `DragTracker` while the widget holds pointer capture |
+| `OnClickBehavior` | `ClickHandler Handler` delegate | `PressHandler` on mouse-up |
+| `OnDragBehavior` | `DragHandler Handler` delegate | `DragHandlerBehavior` while the widget holds pointer capture |
+| `ScrollHandlerBehavior` | `ScrollHandler Handler` delegate | `ScrollHandlerBehavior` on mouse-wheel |
+| `KeyboardHandler` | `KeyHandler Handler` delegate | `KeyboardHandler` on key-down when focused |
+| `FocusHandler` | *(no delegate)* | `FocusHandler` on mouse-down; sets `App.FocusedKey` |
 
 ## Capability queries
 

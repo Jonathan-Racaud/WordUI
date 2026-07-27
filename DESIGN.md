@@ -189,7 +189,7 @@ Button("+"); {
 
 `IfActive<T>` where `T : Property, IInteractionState` get-or-creates a `Property` on the
 stack-top widget, then runs the body only when `T.IsActive` is true. `PressState`
-implements `IInteractionState` by querying `App.Instance.FindNode(ownerKey)?.GetBool(PressTracker.SlotPress)`. The
+implements `IInteractionState` by querying `App.Instance.FindNode(ownerKey)?.GetBool(StateSlots.Press.Id)`. The
 pattern is rebuild-safe: on the first build the `PressState` property is created; on
 subsequent rebuilds `GetProperty<T>` finds it and reuses it. The `IsActive` query returns
 false when the widget isn't being pressed, so the highlight body doesn't run — the widget
@@ -244,19 +244,12 @@ new ones are created, and orphans are disposed. This is the side table grown int
 
 **Per-node state slots and pruning.** Each `Node` carries `Dictionary<int, Variant> mState`
 for generic capability-owned state (hover, press, scroll, user-defined). Slots are typed via
-`StateSlot<T>` accessors; the framework reserves slots 1–99 (`StateSlots.FrameworkIds`) for
+`StateSlot<T>` accessors; the framework reserves slots 1–99 for
 built-in trackers, and user capabilities pick ≥100. After each reconciliation, stale slots
 are pruned: any slot key not referenced by the current widget's `IInteractionState` properties
 (or the framework-reserved set) is removed, preventing unbounded growth.
 
-**Time-based state (Phase 5 direction).** Currently `Node` carries hardcoded animation clocks
-(`Clock` struct, `mClocks`, `Blend()`/`Tick()`/`NeedsTick`). Phase 5 will replace this with a
-generic `ITickable` interface (`src/Core/ITickable.bf` — design artifact): capabilities
-implement `ITickable`, store their own per-frame data in `mState`, and `Node.Tick(dtMs)`
-iterates registered tickables. This lets users author custom time-based behaviours (blinking
-cursor, physics, inertial scroll, custom animation curves) as capabilities without framework
-modification. The `Easing` enum will become an interface or delegate so users can supply
-custom interpolation curves.
+**Time-based state.** The generic `ITickable` interface (`src/Core/ITickable.bf`) lets capabilities receive per-frame `Tick(dtMs)` updates. The built-in `AnimationState` implements `ITickable` — it manages per-StateId eased-progress clocks on each `Node`, advancing toward or away from a boolean target each frame, and self-prunes settled clocks. Capabilities register tickables via `node.RegisterTickable(this)` and unregister in their destructor. This lets users author custom time-based behaviours (blinking cursor, physics, inertial scroll, custom animation curves) as capabilities without framework modification. The `Easing` enum (`Linear`, `EaseInOut`, `Spring`) applies interpolation curves; a future extension may make `Easing` an interface or delegate so users can supply custom curves.
 
 ## Deferred
 
@@ -266,24 +259,25 @@ constraints-down/sizes-up, sum-main/max-cross, leftover→`Spacer`) and paints v
 SDL `Painter` module · **M2** real pointer input → hit-test → dispatch (the minimal GUI-app
 goal; `SimulateClick` retired) · **M3** hover/press states + the repaint-vs-rebuild split ·
 **M4** first persistent state (scroll) forcing the widget-ID side table + clipping · **M5**
-text input + focus + keyboard. Text/fonts is the twice-appearing sleeper (measure gates
-layout, raster gates render), largely covered by SDL2_ttf. Earmarked beyond: memoization
-and `Model<T>` (only if profiled slow), animations, drag protocol, image/asset pipeline,
-complex-object primitives, accessibility, the deferred **renderer/platform abstraction +
-alternate backend** (extracted from the concrete SDL `Painter` once the model is proven),
-core/widgets split (mechanical later, thanks to cross-project extensions).
+text input + focus + keyboard (focus/keyboard done; TextField widget upcoming).
+Earmarked beyond: memoization and `Model<T>` (only if profiled slow), image/asset pipeline,
+complex-object primitives, accessibility, TextField/text editing, the deferred
+**renderer/platform abstraction + alternate backend** (extracted from the concrete SDL
+`Painter` once the model is proven), core/widgets split (mechanical later, thanks to
+cross-project extensions). Animations and drag protocol were delivered ahead of schedule
+in M3.
 
 ## Prototype map
 
 | Path | Contents |
 |---|---|
-| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver + retained Node tree), `Node` (retained runtime elements), `SDLApp`, `Painter`, `Layout`, `HitTest`, `KeyAssign`, `Interaction` (IfActive/Transition), `StyleResolve`, `Easing`, `HoverTracker`, `PressTracker`, `DragTracker`, `ScrollTracker`, `InputEvent`, `Rect`, `Size`, `Primitives` |
-| `src/Components/` | `TextComponent`, `Interior` (fill), `Boundary` (stroke), `StackLayout` (+ `Axis`) |
+| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver + retained Node tree), `Node` (retained runtime elements), `SDLApp`, `Painter`, `Layout`, `HitTest`, `KeyAssign`, `Interaction` (IfActive/Transition), `StyleResolve`, `Easing`, `InputDispatcher`, `InputEvent`, `ITickable`, `AnimationState`, `ITracker`, `IInputHandler`, `PointerCapture`, `Rect`, `Size`, `Primitives`, `StateSlot`, `StateSlots`, `StateSlotLifecycle`, `RenderNode` |
+| `src/Components/` | `TextComponent`, `Interior` (fill), `Boundary` (stroke), `StackLayout` (+ `Axis`), `Children`, `ClipRegion`, `ScrollView`, `RenderDragOffset` |
 | `src/Properties/` | `TextStyleProperty`, `LayoutHint` (+ `CrossAlignment`, `SizingConstraints`), `PressState`, `HoverState` (+ `IInteractionState`), `StatePatch`, `InteractionStyle` |
-| `src/Behaviors/` | `OnClickBehavior` (+ `ClickHandler`), `OnDragBehavior` (+ `DragHandler`) |
-| `src/Widgets/` | words only: `Label`, `Button`, `Stack` (HStack/VStack trios), `Spacer` |
-| `src/Modifiers/` | `Layout` (Padding, Spacing), `Styling` (Background/Border pens + Fill/Stroke/Radius/StrokeWidth), `Text` (TextColor, FontSize), `Identity` (Key), `Alignment` (Center, AlignStart, AlignEnd, AlignStretch, Width, Height, FixedSize) |
-| `src/Handlers/` | `OnClick` (get-or-create OnClickBehavior) |
+| `src/Behaviors/` | `OnClickBehavior` (+ `ClickHandler`), `OnDragBehavior` (+ `DragHandler`), `ScrollHandlerBehavior` (+ `ScrollHandler`, `OnScroll`), `KeyboardHandler` (+ `KeyHandler`, `OnKey`), `FocusHandler` (+ `Focusable`), `PressHandler`, `HoverHandler`, `DragHandlerBehavior` |
+| `src/Widgets/` | words only: `Label`, `Button`, `Stack` (HStack/VStack trios), `Spacer`, `Scrollable` |
+| `src/Modifiers/` | `Layout` (Padding, Spacing), `Styling` (Background/Border pens + Fill/Stroke/Radius/StrokeWidth), `Text` (TextColor, FontSize), `Identity` (Key), `Alignment` (Center, AlignStart, AlignEnd, AlignStretch, Width, Height, FixedSize), `Clip`, `Vertical`, `Horizontal` |
+| `src/Handlers/` | `OnClick` (get-or-create OnClickBehavior), `OnDrag`, `OnScroll`, `OnKey`/`Focusable` |
 | `src/Diagnostics/` | `StackDump` (PrintStack), `TreeDump` |
 | `src/Program.bf` | counter + list demo with IfPressed; `--test-mismatch` / `--test-unbalanced` / `--test-unclosed-pen` / `--test-leftover` |
 | `docs/` | Canonical documentation: concepts, API reference, guides, design decisions, roadmap |

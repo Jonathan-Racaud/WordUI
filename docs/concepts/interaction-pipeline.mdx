@@ -49,7 +49,7 @@ Each `Node` carries:
   interrupting or reversing a transition mid-flight stays smooth. Clocks and state
   slots self-prune after each reconciliation: any slot or clock key not referenced
   by the current widget's `IInteractionState` properties (or the framework-reserved
-  set `StateSlots.FrameworkIds`) is removed, preventing unbounded growth.
+  set) is removed, preventing unbounded growth.
 
 This is the evolution of the earlier flat `InteractionStore` (deleted in the architectural
 refactor): instead of separate per-type dictionaries in a monolithic store, state now lives
@@ -58,25 +58,27 @@ hierarchy.
 
 ### Trackers write to Node state
 
-Each tracker writes to the retained `Node` through typed `StateSlot<T>` accessors
+Each input handler writes to the retained `Node` through typed `StateSlot<T>` accessors
 (defined in `src/Core/StateSlot.bf`, collected in `StateSlots`):
 
-- **HoverTracker** — `StateSlots.Hover` (slot 1, `StateSlot<bool>`): sets a bool on the hovered
+- **HoverHandler** (in `src/Behaviors/HoverHandler.bf`) — `StateSlots.Hover` (slot 1, `StateSlot<bool>`): sets a bool on the hovered
   widget's Node via `StateSlots.Hover.Set(node, true/false)`.
-- **PressTracker** — `StateSlots.Press` (slot 2, `StateSlot<bool>`): sets a bool on the pressed
+- **PressHandler** (in `src/Behaviors/PressHandler.bf`) — `StateSlots.Press` (slot 2, `StateSlot<bool>`): sets a bool on the pressed
   widget's Node.
-- **ScrollTracker** — `StateSlots.Scroll` (slot 3, `StateSlot<float>`): stores a float scroll offset
+- **ScrollHandlerBehavior** (in `src/Behaviors/ScrollHandlerBehavior.bf`) — `StateSlots.Scroll` (slot 3, `StateSlot<float>`): stores a float scroll offset
   on the scrolled widget's Node.
+- **DragHandlerBehavior** (in `src/Behaviors/DragHandlerBehavior.bf`) — `StateSlots.DragOffset` (slot 4, `StateSlot<DragOffset>`): stores the accumulated drag offset.
+- **FocusHandler** (in `src/Behaviors/FocusHandler.bf`) — `StateSlots.Focus` (slot 5, `StateSlot<bool>`): stores whether the widget has keyboard focus.
 
 State properties (`PressState`, `HoverState`) query the Node at draw time via
 `StateSlots.Hover.Get(node)` and `StateSlots.Press.Get(node)` — typed accessors that
 handle null nodes and return `default(T)` for unset slots.
-Animation clocks live per-Node via `node.Blend(stateId, active, durationMs, curve)` —
+Animation clocks live per-Node via `AnimationState.Get(node).Blend(stateId, active, durationMs, curve)` —
 called by `StyleResolve` at draw — and a single `App.TickAll(nowMs)` advances every clock
 in the tree.
 
 Drag capture state (key, accumulated offset, last position) is per-pointer-session, not
-per-widget, so it lives directly on `App` (`BeginDrag`/`UpdateDrag`/`EndDrag`/`DragOffset`)
+per-widget, so it lives directly on `App` (`CaptureBegin`/`CaptureUpdate`/`CaptureEnd`)
 rather than in the Node tree.
 
 ## State bodies record patches
@@ -149,7 +151,7 @@ pass-through.
 
 ## Drag
 
-`OnDrag` makes the stack-top widget draggable. On press over it, `DragTracker` begins a
+`OnDrag` makes the stack-top widget draggable. On press over it, `DragHandlerBehavior` begins a
 **pointer capture** on `App` keyed by `StableKey`; while captured, all motion routes to
 that widget's handler regardless of what the pointer is over. The handler receives the
 incremental delta each move:
@@ -162,6 +164,37 @@ OnDrag(new (dx, dy) => { mX += dx; mY += dy; Invalidate(); });
 The visual follows via a **render-time offset** applied in `SDLApp.DrawWidget` — no relayout,
 no rebuild. Live reflow (dragging that pushes other widgets around) is a later phase behind
 the same tracker seam.
+
+## Focus and keyboard
+
+Focus is a retained per-widget boolean (`StateSlots.Focus`, slot 5) managed by
+`FocusHandler` (attached via the `Focusable()` word). On mouse-down over a focusable
+widget, `FocusHandler`:
+
+1. Clears focus on the previously-focused Node (writes `false` to slot 5, marks paint-dirty)
+2. Sets focus on the new widget's Node (writes `true` to slot 5)
+3. Updates `App.FocusedKey` to the new widget's `StableKey`
+4. Calls `RequestRepaint()` — no rebuild
+
+Keyboard events (`KeyDown`) arrive at `InputDispatcher`, which looks up
+`App.FocusedKey`, finds the corresponding widget via `FindByKey`, and dispatches to the
+widget's `KeyboardHandler` (if present — attached via `OnKey(handler)`).
+
+```beef
+TextField(); Focusable(); OnKey(new (keycode, mods) => {
+    if (keycode == .(int)SDLK_RETURN)
+        Submit();
+});
+```
+
+Because focus state lives in the retained Node tree (slot 5), it survives rebuilds.
+A future `IfFocused` interaction state (user-authored, following the
+`IInteractionState` pattern with `StateId ≥ 100`) can drive focus-dependent styling
+the same way `IfHover`/`IfPressed` do.
+
+Keyboard focus and key events are part of the **repaint** path, not the rebuild path —
+pressing a key fires the handler without tearing down the tree. Only if the handler calls
+`Invalidate()` (e.g. to update app state) does a rebuild occur.
 
 ## The event loop: block when idle, tick when animating
 
@@ -203,7 +236,7 @@ extension UI
 
 `StateId` must be stable and globally unique per state type — it keys the animation clock
 so a transition keeps its progress across rebuilds. The framework reserves slots 1–99
-(`StateSlots.FrameworkIds`); user states **must** pick ≥ 100. If two different
+framework reserves slots 1–99; user states **must** pick ≥ 100. If two different
 `IInteractionState` types share the same `StateId`, the build fails with a named error
 (collision detection in `RecordPatch`). `IsActiveFor` reads from the retained `Node`
 through a typed `StateSlot<T>` accessor (shown as `MySlots.Focused` above).

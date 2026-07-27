@@ -1,6 +1,6 @@
 ---
 title: Handlers
-description: Event handler words — OnClick, OnDrag, and OnScroll, and their delegates
+description: Event handler words — OnClick, OnDrag, OnScroll, OnKey, and Focusable, and their delegates
 ---
 
 Event handler words attach behavior to widgets using the **get-or-create pattern** on the
@@ -51,7 +51,7 @@ class CounterSDLApp : SDLApp
 ### What happens on click
 
 1. SDL mouse-up event arrives at `SDLApp`'s event loop
-2. `PressTracker` (keyed by `StableKey`, not a `Widget*`) checks: were mouse-down and mouse-up on the same widget?
+2. `PressHandler` (keyed by `StableKey`, not a `Widget*`) checks: were mouse-down and mouse-up on the same widget?
 3. If yes, it walks the hit-test chain, finds each widget's `OnClickBehavior`, and fires its `Handler`
 4. The handler runs user code (e.g. `mCount++`)
 5. The handler calls `Invalidate()` to trigger a rebuild
@@ -100,7 +100,7 @@ OnDrag(new (dx, dy) => { mX += dx; mY += dy; Invalidate(); });
 ```
 
 Makes the stack-top widget draggable by attaching an `OnDragBehavior`. On press over the
-widget, `DragTracker` begins a **pointer capture** in the persistent store keyed by
+widget, `DragHandlerBehavior` begins a **pointer capture** in the persistent store keyed by
 `StableKey`; while captured, every motion event routes to this handler with the incremental
 delta since the last move — even when the pointer leaves the widget's rect. Release ends the
 capture.
@@ -130,7 +130,7 @@ OnScroll(new (offset) => { mScrolledTo = offset; });
 ```
 
 Attaches an `OnScrollBehavior` to the stack-top widget. When a wheel event scrolls the widget,
-`ScrollTracker` adjusts its persistent offset (clamped to the content extent) and then invokes
+`ScrollHandlerBehavior` adjusts its persistent offset (clamped to the content extent) and then invokes
 this handler with the new offset. Unlike `OnDrag`, a wheel is a discrete impulse with no
 capture — so `OnScroll` is a plain event consumer, not a gesture. The scroll itself (offset
 storage + clipped translation) happens whether or not a handler is attached; `OnScroll` is for
@@ -143,6 +143,50 @@ public delegate void ScrollHandler(float offset);
 ```
 
 Receives the widget's new clamped scroll offset in pixels.
+
+## OnKey
+
+```
+( widget KeyHandler -- widget )
+```
+
+```beef
+TextField(); Focusable();
+OnKey(new (keycode, modifiers) => { HandleKey(keycode, modifiers); });
+```
+
+Attaches a `KeyboardHandler` to the stack-top widget's Behavior bag. The handler fires
+when a key is pressed **and** the widget holds focus (checked via
+`App.FocusedKey == owner.StableKey`). Pair with `Focusable()` to make the widget
+focusable; focus is managed independently by `FocusHandler`.
+
+### KeyHandler delegate
+
+```beef
+public delegate void KeyHandler(int keycode, int modifiers);
+```
+
+- `keycode` — SDL keycode (platform-independent virtual key)
+- `modifiers` — bitmask of SDL keymods (Shift, Ctrl, Alt, etc.)
+
+## Focusable
+
+```
+( widget -- widget )
+```
+
+```beef
+TextField(); Focusable(); OnKey(new (k, m) => { ... });
+```
+
+Attaches a `FocusHandler` to the stack-top widget's Behavior bag. On mouse-down over the
+widget, `FocusHandler` sets `App.FocusedKey` to the widget's `StableKey`, writes
+`StateSlots.Focus` (slot 5) to the retained Node, and requests a repaint (no rebuild).
+The previously-focused widget has its focus cleared. Keyboard events are then routed by
+`InputDispatcher` to the focused widget's `KeyboardHandler`.
+
+Use `Focusable()` + `OnKey()` together for a keyboard-interactive widget; `Focusable()`
+alone is enough if you just need focus tracking (e.g. for `IfFocused` styling).
 
 ## Authoring a new behavior
 

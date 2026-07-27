@@ -2,6 +2,7 @@ FileVersion = 1
 
 [Project]
 Name = "WordUI"
+TargetType = "BeefLib"
 StartupObject = "WordUI.Program"
 
 [Dependencies]

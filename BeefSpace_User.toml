@@ -1,14 +1,14 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Behaviors/OnDrag.bf", "src/Core/Color.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["src/Core/Color.bf", "example/TodoApp/src/Program.bf", "src/Behaviors/OnDrag.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
 
 [MainWindow]
 X = 0
 Y = 0
-Width = 1280
+Width = 2560
 Height = 1366
-ShowKind = "ShowNormal"
+ShowKind = "ShowMaximized"
 
 [MainDockingFrame]
 Type = "DockingFrame"
@@ -43,11 +43,31 @@ DefaultDocumentsTabbedView = true
 Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+Active = true
 TabLabel = "Color.bf"
-TabWidth = 74.0
+TabWidth = 84.0
 TabIsPinned = false
 Type = "SourceViewPanel"
 FilePath = "src/Core/Color.bf"
+CursorPos = 1097
+ProjectName = "WordUI"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "Program.bf"
+TabWidth = 103.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "example/TodoApp/src/Program.bf"
+CursorPos = 114
+ProjectName = "TodoApp"
+
+[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
+TabLabel = "OnDrag.bf"
+TabWidth = 88.0
+TabIsPinned = false
+Type = "SourceViewPanel"
+FilePath = "src/Behaviors/OnDrag.bf"
+CursorPos = 1083
 ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]
