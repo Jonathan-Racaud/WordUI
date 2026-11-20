@@ -3,8 +3,8 @@ using System;
 namespace WordUI;
 
 // Fired when a key is pressed while this widget holds focus.
-// keycode: SDL keycode (platform-independent virtual key)
-// modifiers: bitmask of SDL keymods (Shift, Ctrl, Alt, etc.)
+// keycode: a shared KeyCode value
+// modifiers: bitmask of KeyModifier values
 public delegate void KeyHandler(int keycode, int modifiers);
 
 // Keyboard input handler. Carries its own KeyHandler delegate — no separate

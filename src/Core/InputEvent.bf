@@ -2,8 +2,7 @@ using System;
 
 namespace WordUI;
 
-// Adapted SDL event at the framework boundary: SDL types never cross into
-// hit-testing, dispatch, or any handler.
+// Backend-neutral input event forwarded to hit-testing and handlers.
 public struct InputEvent
 {
 	public enum Kind
@@ -18,6 +17,6 @@ public struct InputEvent
 	public Kind Type;
 	public float X, Y;          // pointer position in window coords
 	public float WheelX, WheelY; // scroll amounts (MouseWheel only)
-	public int KeyCode;          // SDL keycode (KeyDown only)
-	public int KeyModifiers;     // SDL keymod bitmask (KeyDown only)
+	public int KeyCode;          // KeyCode value (KeyDown only)
+	public int KeyModifiers;     // KeyModifier bitmask (KeyDown only)
 }

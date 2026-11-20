@@ -103,7 +103,7 @@ public class FilledRect : Component
 {
     public Color FillColor = .White;
 
-    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+    public override void DrawBackground(IPainter painter, Widget widget, Rect bounds)
     {
         painter.FillRect(bounds, FillColor);
     }
@@ -132,7 +132,7 @@ value instead of reading the field raw — the framework's own `Interior`, `Boun
 `TextComponent` do exactly this:
 
 ```beef
-public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+public override void DrawBackground(IPainter painter, Widget widget, Rect bounds)
 {
     let fill = StyleResolve.Color(widget, FillColor, .Fill);   // base → blended patches
     painter.FillRect(bounds, fill);

@@ -1,13 +1,13 @@
 FileVersion = 1
 LastConfig = "Debug"
 LastPlatform = "Linux64"
-RecentFilesList = ["src/Core/Color.bf", "example/TodoApp/src/Program.bf", "src/Behaviors/OnDrag.bf", "src/Core/InteractionStore.bf", "src/Core/Widget.bf", "/home/vendinois/.config/beeflang/BeefManaged/14d36c83d95be232ce7c4515f4357c338fe082f7/src/SDL_video.bf"]
+RecentFilesList = ["example\\TodoApp\\src\\Program.bf", "src\\Core\\InteractionStore.bf", "src\\Core\\Widget.bf", "c:\\home\\vendinois\\.config\\beeflang\\BeefManaged\\14d36c83d95be232ce7c4515f4357c338fe082f7\\src\\SDL_video.bf"]
 
 [MainWindow]
 X = 0
 Y = 0
-Width = 2560
-Height = 1366
+Width = 1294
+Height = 1399
 ShowKind = "ShowMaximized"
 
 [MainDockingFrame]
@@ -29,9 +29,11 @@ Type = "TabbedView"
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
 TabLabel = "Workspace"
-TabWidth = 111.0
+TabWidth = 112.5
 TabIsPinned = false
 Type = "ProjectPanel"
+ScrollPos = 0.0
+OpenFolders = ["PI:TodoApp"]
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets]]
 IsFillWidget = true
@@ -44,31 +46,13 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
-TabLabel = "Color.bf"
-TabWidth = 84.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Core/Color.bf"
-CursorPos = 1097
-ProjectName = "WordUI"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Program.bf"
-TabWidth = 103.0
+TabWidth = 102.8846
 TabIsPinned = false
 Type = "SourceViewPanel"
-FilePath = "example/TodoApp/src/Program.bf"
-CursorPos = 114
+FilePath = "example\\TodoApp\\src\\Program.bf"
+CursorPos = 1167
 ProjectName = "TodoApp"
-
-[[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
-TabLabel = "OnDrag.bf"
-TabWidth = 88.0
-TabIsPinned = false
-Type = "SourceViewPanel"
-FilePath = "src/Behaviors/OnDrag.bf"
-CursorPos = 1083
-ProjectName = "WordUI"
 
 [[MainDockingFrame.DockedWidgets]]
 RequestedWidth = 250.0
@@ -84,7 +68,7 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Memory"
-TabWidth = 96.0
+TabWidth = 97.11539
 TabIsPinned = false
 Type = "MemoryPanel"
 AutoResize = "Auto_Mul8"
@@ -92,7 +76,7 @@ RequestedWidth = 300.0
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Watch"
-TabWidth = 85.0
+TabWidth = 84.61539
 TabIsPinned = false
 Type = "WatchPanel"
 Columns = [{Width = 200.0}, {Width = 200.0}, {Width = 200.0}]
@@ -100,7 +84,7 @@ Columns = [{Width = 200.0}, {Width = 200.0}, {Width = 200.0}]
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
 TabLabel = "Auto"
-TabWidth = 75.0
+TabWidth = 75.96154
 TabIsPinned = false
 Type = "AutoWatchPanel"
 Columns = [{Width = 200.0}, {Width = 200.0}, {Width = 200.0}]
@@ -113,26 +97,26 @@ Type = "TabbedView"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Threads"
-TabWidth = 94.0
+TabWidth = 95.19231
 TabIsPinned = false
 Type = "ThreadPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Call Stack"
-TabWidth = 103.0
+TabWidth = 102.8846
 TabIsPinned = false
 Type = "CallStackPanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 TabLabel = "Immediate"
-TabWidth = 109.0
+TabWidth = 108.6538
 TabIsPinned = false
 Type = "ImmediatePanel"
 
 [[MainDockingFrame.DockedWidgets.DockedWidgets.Tabs]]
 Active = true
 TabLabel = "Output"
-TabWidth = 88.0
+TabWidth = 88.46154
 TabIsPinned = false
 Type = "OutputPanel"
 

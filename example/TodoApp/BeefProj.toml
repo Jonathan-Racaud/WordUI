@@ -7,3 +7,4 @@ StartupObject = "TodoApp.Program"
 [Dependencies]
 corlib = "*"
 WordUI = "*"
+WordUISDL = "*"

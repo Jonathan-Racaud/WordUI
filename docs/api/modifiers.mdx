@@ -58,8 +58,8 @@ Scrollable(scope () => { ... }); Height(.Fixed(240)); Clip();
 Attaches a `ClipRegion` component (Component bag) to the stack-top container, restricting its
 children's drawing to its own bounds. Clipping is independent of scroll — `Clip()` works on
 any container — so a scroll viewport that hides overflow is `Scrollable(...)` + a bounded
-`Height` + `Clip()`. The clip is applied around the children in `SDLApp.DrawWidget` via the
-`Painter`'s clip stack (which intersects nested clips), so a container's own border still
+`Height` + `Clip()`. The clip is applied around the children in `App.DrawWidget` via the
+active `IPainter`'s clip stack (which intersects nested clips), so a container's own border still
 strokes its full box.
 
 ### Vertical / Horizontal

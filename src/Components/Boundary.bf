@@ -18,7 +18,7 @@ public class Boundary : Component
 			buf.Append(scope $" Radius={Radius}");
 	}
 
-	public override void DrawOverlay(Painter painter, Widget widget, Rect bounds)
+	public override void DrawOverlay(IPainter painter, Widget widget, Rect bounds)
 	{
 		let stroke = StyleResolve.Color(widget, StrokeColor, .Stroke);
 		let width = StyleResolve.Float(widget, StrokeWidth, .StrokeWidth);

@@ -8,7 +8,7 @@
 WordUI is an experiment: capture the *essence* of concatenative programming — Factor's UI
 vocabulary in particular — inside Beef, an applicative language, without building an
 interpreter. UI is a sequence of **words** operating on an implicit widget stack.
-Rendering uses SDL3 directly; the current prototype renders the counter demo with real
+Rendering supports SDL3 and Raylib backends; the current prototype renders the counter demo with real
 mouse hit-test → click → rebuild → repaint.
 
 ## The shape
@@ -52,15 +52,14 @@ VStack(scope () => {
    (pipeline participants — `Measure`, `Draw*`), `Property` (pure data), and `Behavior`
    (event handlers). The single inheritance points are `Component`, `Property`, and
    `Behavior`, each one level deep.
-6. **Direct SDL3 now; renderer/platform abstraction deferred.** The framework uses SDL3
-   directly (via `BeefLibs/SDL2`: `SDL_Renderer` + `SDL2_ttf`) while the concatenative model
-   is being validated — the thesis under test lives on the framework side, where the
-   backend's identity is irrelevant, and a one-implementation abstraction is best *extracted*
-   from working code later than *designed* blind now. The only discipline kept from the
-   abandoned seam is **localization** (not abstraction): SDL drawing flows through one
-   concrete `Painter` module, and `SDL_Event` is adapted to a WordUI `InputEvent` at a single
-   boundary, so the eventual abstraction is a mechanical extract-interface refactor rather
-   than a rewrite. A build-your-own renderer (GL/software) is a far-future alternate backend.
+6. **Backend-neutral UI core; platform and drawing services live at the edge.** `App`
+   owns build, layout, input dispatch, and widget traversal independently of a window
+   library. Components draw through `IPainter`; backend adapters provide drawing and text
+   measurement and translate native input into WordUI events. `SDLApp` remains a standalone
+   SDL host with its own event loop, while `RaylibBackend` is driven by the host application's
+   existing Raylib window and frame loop. The UI core does not create, close, or own a
+   backend window. New renderers should implement the same drawing contract and forward
+   normalized input through `App.ProcessInput` and `App.ProcessMotion`.
 
 ## Architecture
 
@@ -259,19 +258,21 @@ constraints-down/sizes-up, sum-main/max-cross, leftover→`Spacer`) and paints v
 SDL `Painter` module · **M2** real pointer input → hit-test → dispatch (the minimal GUI-app
 goal; `SimulateClick` retired) · **M3** hover/press states + the repaint-vs-rebuild split ·
 **M4** first persistent state (scroll) forcing the widget-ID side table + clipping · **M5**
-text input + focus + keyboard (focus/keyboard done; TextField widget upcoming).
+text input + focus + keyboard (focus/keyboard done; TextField widget upcoming) · **M6**
+backend-neutral app/painter contracts with SDL and Raylib adapters.
 Earmarked beyond: memoization and `Model<T>` (only if profiled slow), image/asset pipeline,
 complex-object primitives, accessibility, TextField/text editing, the deferred
-**renderer/platform abstraction + alternate backend** (extracted from the concrete SDL
-`Painter` once the model is proven), core/widgets split (mechanical later, thanks to
-cross-project extensions). Animations and drag protocol were delivered ahead of schedule
+additional drawing backends implementing `IPainter`, core/widgets split (mechanical later,
+thanks to cross-project extensions). Animations and drag protocol were delivered ahead of schedule
 in M3.
 
 ## Prototype map
 
 | Path | Contents |
 |---|---|
-| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (rebuild driver + retained Node tree), `Node` (retained runtime elements), `SDLApp`, `Painter`, `Layout`, `HitTest`, `KeyAssign`, `Interaction` (IfActive/Transition), `StyleResolve`, `Easing`, `InputDispatcher`, `InputEvent`, `ITickable`, `AnimationState`, `ITracker`, `IInputHandler`, `PointerCapture`, `Rect`, `Size`, `Primitives`, `StateSlot`, `StateSlots`, `StateSlotLifecycle`, `RenderNode` |
+| `src/Core/` | `Color`, `Component` (base), `Property` (base), `Behavior` (base), `Widget` (the one class, 3 bags), `Children`, `StackItem`, `UI` (stack + core ops), `App` (backend-neutral rebuild/frame driver + retained Node tree), `Node` (retained runtime elements), `IPainter`, `Layout`, `HitTest`, `KeyAssign`, `Interaction` (IfActive/Transition), `StyleResolve`, `Easing`, `InputDispatcher`, `InputEvent`, `KeyCode`, `ITickable`, `AnimationState`, `ITracker`, `IInputHandler`, `PointerCapture`, `Rect`, `Size`, `Primitives`, `StateSlot`, `StateSlots`, `StateSlotLifecycle`, `RenderNode` |
+| `backends/SDL/` | Optional SDL host/event loop and SDL painter Beef project |
+| `backends/Raylib/` | Optional host-driven Raylib input and painter Beef project |
 | `src/Components/` | `TextComponent`, `Interior` (fill), `Boundary` (stroke), `StackLayout` (+ `Axis`), `Children`, `ClipRegion`, `ScrollView`, `RenderDragOffset` |
 | `src/Properties/` | `TextStyleProperty`, `LayoutHint` (+ `CrossAlignment`, `SizingConstraints`), `PressState`, `HoverState` (+ `IInteractionState`), `StatePatch`, `InteractionStyle` |
 | `src/Behaviors/` | `OnClickBehavior` (+ `ClickHandler`), `OnDragBehavior` (+ `DragHandler`), `ScrollHandlerBehavior` (+ `ScrollHandler`, `OnScroll`), `KeyboardHandler` (+ `KeyHandler`, `OnKey`), `FocusHandler` (+ `Focusable`), `PressHandler`, `HoverHandler`, `DragHandlerBehavior` |

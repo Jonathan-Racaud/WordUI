@@ -17,7 +17,7 @@ public class Interior : Component
 			buf.Append(scope $" Radius={Radius}");
 	}
 
-	public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+	public override void DrawBackground(IPainter painter, Widget widget, Rect bounds)
 	{
 		let fill = StyleResolve.Color(widget, FillColor, .Fill);
 		if (fill.A == 0)

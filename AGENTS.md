@@ -14,8 +14,11 @@ BeefSpace.toml             # Workspace config
 DESIGN.md                  # Architecture, locked decisions, and rationale
 README.md                  # Quick-start, build instructions, status
 plans/                     # Per-session planning docs and brainstorming notes
+backends/
+├── SDL/                   # Optional SDL host, painter, and Beef library project
+└── Raylib/                # Optional host-driven Raylib painter and Beef library project
 src/
-├── Core/                  # Foundation: Widget (sealed, 3 bags), App, UI (stack + ops), Component/Property/Behavior base classes, Color, Children, StackItem, Primitives, Rect, Size, Layout, Painter, HitTest, InputEvent, SDLApp
+├── Core/                  # Backend-neutral foundation: Widget (sealed, 3 bags), App, UI, Component/Property/Behavior, IPainter, geometry, layout, and input contracts
 │                          #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), StateSlot (typed per-node state accessors), StateSlots (framework-reserved slots), StateSlotLifecycle, RenderNode, Interaction (IfActive/Transition), StyleResolve, Easing, ITracker, IInputHandler, InputDispatcher, PointerCapture
 │                          #   + tick/animation: ITickable, AnimationState (per-Node eased-progress clocks)
 ├── Components/            # Pipeline participants (Component bag): TextComponent, Interior, Boundary, StackLayout, Children, ClipRegion, ScrollView, RenderDragOffset
@@ -62,6 +65,7 @@ Diagnostics flags (run via the built binary):
 ## Coding Style & Naming Conventions
 
 - **Language:** Beef (`.bf` files), with `using static` to expose word-based APIs.
+- **Project boundaries:** `WordUI` is the renderer-independent library. SDL and Raylib live in separate backend Beef projects so consumers can depend only on the backend they use.
 - **Naming:** PascalCase for types, methods, namespaces, and public fields. Member fields use `m` prefix (`mCount`, `mRoot`, `mComponents`).
 - **Brace style:** Allman — opening brace on its own line.
 - **Conciseness:** Prefer single-expression blocks and expression-bodied members where clear.

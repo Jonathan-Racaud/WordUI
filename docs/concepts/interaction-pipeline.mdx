@@ -161,7 +161,7 @@ Button("drag me");
 OnDrag(new (dx, dy) => { mX += dx; mY += dy; Invalidate(); });
 ```
 
-The visual follows via a **render-time offset** applied in `SDLApp.DrawWidget` — no relayout,
+The visual follows via a **render-time offset** applied in `App.DrawWidget` — no relayout,
 no rebuild. Live reflow (dragging that pushes other widgets around) is a later phase behind
 the same tracker seam.
 
@@ -182,7 +182,7 @@ widget's `KeyboardHandler` (if present — attached via `OnKey(handler)`).
 
 ```beef
 TextField(); Focusable(); OnKey(new (keycode, mods) => {
-    if (keycode == .(int)SDLK_RETURN)
+    if (keycode == (int)KeyCode.Enter)
         Submit();
 });
 ```

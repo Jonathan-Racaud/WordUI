@@ -93,7 +93,7 @@ public class DragHandlerBehavior : Behavior, IInputHandler, IHasStateSlots
 }
 
 // Arena-allocated component that contributes the accumulated drag offset at draw
-// time. SDLApp.DrawWidget calls GetRenderOffset on every component and accumulates
+// time. App.DrawWidget calls GetRenderOffset on every component and accumulates
 // the result — this is how drag visual offset reaches the renderer without
 // hardcoded drag knowledge in the draw loop.
 public class RenderDragOffset : Component

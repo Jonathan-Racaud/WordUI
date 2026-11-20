@@ -44,7 +44,8 @@ applications in a language that was never designed for it.
 - **Draw-time interaction pipeline**: `IfPressed`/`IfHover`/`OnDrag`/`Transition` record
   field-level style patches blended at draw, keyed by a persistent `StableKey` — interaction
   repaints instead of rebuilding, so the loop idles at ~0% CPU
-- **Direct SDL3 rendering**: drawing flows through one concrete `Painter` module
+- **Backend-neutral rendering**: the core draws through `IPainter`; SDL and Raylib adapters
+  supply drawing and text services, while the host may own the Raylib window and frame loop
 
 ## Where to start
 
@@ -59,9 +60,9 @@ applications in a language that was never designed for it.
 
 ## Status
 
-Early experiment. Working today: the word vocabulary (Label, Button, HStack/VStack,
+early experiment. Working today: the word vocabulary (Label, Button, HStack/VStack,
 Spacer), modifiers, styling (Background/Border pens), alignment + sizing constraints,
 OnClick dispatch with real mouse hit-test, and a draw-time interaction pipeline —
 press and hover highlights (`IfPressed`/`IfHover`), animated transitions (`Transition`),
 and drag (`OnDrag`) — over a persistent, rebuild-surviving retained `Node` tree, plus runtime
-stack diagnostics. Scroll and text input are upcoming.
+stack diagnostics. SDL and Raylib backends are available; text input (TextField) is upcoming.

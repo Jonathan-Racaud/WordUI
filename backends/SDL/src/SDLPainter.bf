@@ -5,11 +5,8 @@ using SDL3_ttf;
 
 namespace WordUI;
 
-// Concrete drawing module over SDL_Renderer + SDL3_ttf. All SDL drawing
-// calls are localized here — no SDL types leak into the framework.
-// Plain class, no interface: the abstraction is extracted later once the
-// SDL3 model is proven.
-public class Painter
+// Concrete drawing module over SDL_Renderer + SDL3_ttf.
+public class SDLPainter : IPainter
 {
 	SDL_Renderer* mRenderer;
 	TTF_Font* mFont;

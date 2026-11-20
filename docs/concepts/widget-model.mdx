@@ -41,9 +41,9 @@ level deep. It provides virtual hooks that framework passes call into:
 |---|---|---|
 | `Describe(String)` | TreeDump | Human-readable description |
 | `Measure(Size)` | Layout pass | Return intrinsic size |
-| `DrawBackground(Painter, Widget, Rect)` | Paint pass (back) | Fill, background color |
-| `DrawContent(Painter, Widget, Rect)` | Paint pass (middle) | Text, custom drawing |
-| `DrawOverlay(Painter, Widget, Rect)` | Paint pass (front) | Borders, debug overlays |
+| `DrawBackground(IPainter, Widget, Rect)` | Paint pass (back) | Fill, background color |
+| `DrawContent(IPainter, Widget, Rect)` | Paint pass (middle) | Text, custom drawing |
+| `DrawOverlay(IPainter, Widget, Rect)` | Paint pass (front) | Borders, debug overlays |
 
 Framework components and user components are **peers**; every pass dispatches through the
 same virtual hooks. A user's `Component` subclass participates in layout, rendering, and

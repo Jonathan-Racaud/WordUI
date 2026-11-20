@@ -17,8 +17,7 @@ namespace WordUI;
 // of this class.
 public abstract class App
 {
-	// The active App instance; set by SDLApp constructor, used by trackers
-	// and other infrastructure that need to trigger rebuilds.
+	// The active App instance, used by trackers and other UI infrastructure.
 	public static App Instance;
 
 	BumpAllocator mArena ~ delete _;
@@ -30,6 +29,7 @@ public abstract class App
 	bool mDirty = true;
 	bool mNeedsRepaint = false;
 	bool mNeedsLayout = false;
+	public IPainter Painter { get; set; }
 
 	// ---- Retained runtime: the Node tree ----
 
@@ -88,13 +88,108 @@ public abstract class App
 	// A tracker returning true stops iteration (consumes the event).
 	List<ITracker> mTrackers = new .() ~ DeleteContainerAndItems!(_);
 
+	public this()
+	{
+		App.Instance = this;
+		RegisterTracker(new InputDispatcher());
+	}
+
 	public void RegisterTracker(ITracker t)
 	{
 		mTrackers.Add(t);
 	}
 
-	// Iterated by the backend's event loop. Registration order = dispatch order.
-	public List<ITracker> Trackers => mTrackers;
+	// Backend adapters forward normalized input through these entry points.
+	public void ProcessInput(InputEvent input)
+	{
+		for (let t in mTrackers)
+			if (t.HandleEvent(Root, input))
+				return;
+	}
+
+	public void ProcessMotion(float x, float y)
+	{
+		for (let t in mTrackers)
+			if (t.HandleMotion(Root, x, y))
+				return;
+	}
+
+	// Performs pending build/layout work and advances time-based state.
+	// Returns true when the host should render a frame.
+	public bool UpdateFrame(Rect available, int nowMs)
+	{
+		TickAll(nowMs);
+		if (RebuildIfNeeded())
+		{
+			Layout.Run(available, Root, mRootNode);
+			return true;
+		}
+		if (LayoutIfNeeded(available))
+			return true;
+		return NeedsRepaint || NeedsTick;
+	}
+
+	// Draws the retained widget tree into the host's current drawing frame.
+	public void DrawFrame(IPainter painter)
+	{
+		if (Root == null || painter == null)
+			return;
+		let rootNode = FindNode(Root.StableKey);
+		DrawWidget(Root, 0, 0, true, rootNode, painter);
+		ClearRepaint();
+		mRootNode?.ClearPaintDirty();
+	}
+
+	void DrawWidget(Widget w, float ox, float oy, bool ancestorDirty, Node node, IPainter painter)
+	{
+		if (w == null)
+			return;
+
+		let rn = node?.RenderNode;
+		bool thisDirty = ancestorDirty || (rn != null && rn.NeedsPaint);
+		if (!thisDirty)
+			return;
+
+		var tx = ox;
+		var ty = oy;
+		for (let c in w.Components)
+		{
+			let (cox, coy) = c.GetRenderOffset(w, node);
+			tx += cox;
+			ty += coy;
+		}
+
+		Rect bounds = rn != null
+			? .(rn.Bounds.X + tx, rn.Bounds.Y + ty, rn.Bounds.Width, rn.Bounds.Height)
+			: .(tx, ty, 0, 0);
+
+		for (let c in w.Components)
+			c.DrawBackground(painter, w, bounds);
+		for (let c in w.Components)
+			c.DrawContent(painter, w, bounds);
+
+		var childOx = tx;
+		var childOy = ty;
+		bool clip = w.GetComponent<ClipRegion>() != null;
+		if (clip)
+			painter.PushClip(bounds);
+
+		let children = w.GetComponent<Children>();
+		if (children != null)
+		{
+			for (let child in children.Items)
+			{
+				let childNode = FindNode(child.StableKey);
+				DrawWidget(child, childOx, childOy, thisDirty, childNode, painter);
+			}
+		}
+
+		if (clip)
+			painter.PopClip();
+
+		for (let c in w.Components)
+			c.DrawOverlay(painter, w, bounds);
+	}
 
 	// ---- Public accessors ----
 
@@ -174,8 +269,7 @@ public abstract class App
 	}
 
 	// True while any ITickable in the retained tree needs frame updates, or a
-	// pointer capture is active — drives the event loop to use a frame-clock
-	// timeout instead of blocking in SDL_WaitEvent.
+	// pointer capture is active — asks the host for another frame.
 	public bool NeedsTick
 	{
 		get

@@ -4,7 +4,7 @@ namespace WordUI;
 
 // Marker component: a widget carrying a ClipRegion clips its children's drawing
 // to its own bounds. A pure marker with no data — the clip is applied centrally
-// in SDLApp.DrawWidget (which brackets the children recurse with the Painter's
+// in App.DrawWidget (which brackets the children recurse with the painter's
 // clip stack), the same place the drag/scroll render offset is folded in.
 //
 // Clipping is its own composable capability, independent of scroll: Clip() works

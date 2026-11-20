@@ -6,7 +6,8 @@ description: Build, run, and understand your first WordUI application
 ## Prerequisites
 
 - [Beef toolchain](https://www.beeflang.org/) (`BeefBuild` on your PATH; or use `build` from the project's devenv)
-- SDL3 development libraries (installed via your system package manager or the project's Nix/devenv environment)
+- SDL3 development libraries only when building the `WordUISDL` backend/example (installed via your system package manager or the project's Nix/devenv environment)
+- The Raylib Beef binding when building `WordUIRaylib`; it is a separate backend dependency and is not required by the core `WordUI` project
 
 ## Build & run
 
@@ -40,7 +41,8 @@ Each flag runs a negative-test app class that intentionally triggers a named err
 
 ## Your first WordUI app
 
-Create a new Beef project and add a reference to WordUI. A minimal app:
+Create a new Beef project and add references to `WordUI` and `WordUISDL`. A minimal app
+using the standalone SDL host:
 
 ```beef
 using WordUI;
@@ -73,11 +75,59 @@ The key pattern, intentionally simple:
 - **`Invalidate()` triggers a rebuild**: the old widget tree is freed wholesale and a fresh one is allocated in a bump arena.
 - **Handlers close over state**: the `Increment` method reads and mutates `mCount`, then calls `Invalidate()` to reflect the change.
 
+## Embedding in a Raylib application
+
+The Raylib adapter uses an already-initialized Raylib window. The host owns the application
+loop and drawing frame; WordUI polls Raylib input, updates its retained tree, and draws
+through its `RaylibBackend`:
+
+Add references to the `WordUI` and `WordUIRaylib` Beef projects.
+
+```beef
+using WordUI;
+using RaylibBeef;
+using static RaylibBeef.Raylib;
+
+class GameUI : App
+{
+    protected override void Build()
+    {
+        VStack(scope () => {
+            Label("Game UI"); FontSize(24);
+            Button("Continue"); OnClick(new => ContinueGame);
+        }); Padding(16);
+    }
+
+    void ContinueGame() { }
+}
+
+InitWindow(1024, 768, "My Game");
+let app = scope GameUI();
+let ui = scope RaylibBackend(app, GetFontDefault());
+while (!WindowShouldClose())
+{
+    ui.Update();
+    BeginDrawing();
+    ClearBackground(RaylibBeef.Color(30, 30, 30, 255));
+    ui.Draw();
+    EndDrawing();
+}
+CloseWindow();
+```
+
+`RaylibBackend` does not initialize or close the window and does not unload the supplied
+font. `Update()` forwards pointer, wheel, and key input, advances animations, and performs
+pending build/layout work. Call `Draw()` inside Raylib's drawing frame. For applications
+that draw every game frame, it is fine to call `Draw()` every iteration.
+
 ## Project structure
 
 ```
+backends/
+├── SDL/           # Optional SDL host, event loop, and painter project
+└── Raylib/        # Optional host-driven Raylib painter project
 src/
-├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, SDLApp, Painter, Layout, HitTest, InputEvent, Rect, Size, Color, Primitives
+├── Core/          # Foundation: Widget (sealed, 3 bags), Component/Property/Behavior (base classes), UI (stack + core ops), App, IPainter, Layout, HitTest, InputEvent, KeyCode, Rect, Size, Color, Primitives
 │                  #   + interaction pipeline: KeyAssign (StableKey), Node (retained tree), Interaction (IfActive/Transition), StyleResolve, Easing, InputDispatcher, ITracker, IInputHandler, PointerCapture
 │                  #   + tick/animation: ITickable, AnimationState (per-Node eased-progress clocks)
 ├── Components/    # Pipeline participants: TextComponent, Interior, Boundary, StackLayout, Children, ClipRegion, ScrollView, RenderDragOffset

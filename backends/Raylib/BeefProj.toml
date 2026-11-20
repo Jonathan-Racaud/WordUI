@@ -1,0 +1,10 @@
+FileVersion = 1
+
+[Project]
+Name = "WordUIRaylib"
+TargetType = "BeefLib"
+
+[Dependencies]
+corlib = "*"
+WordUI = "*"
+raylib-beef = "*"

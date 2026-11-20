@@ -1,10 +1,14 @@
 FileVersion = 1
+ExtraPlatforms = ["Linux64"]
 
 [Workspace]
 StartupProject = "TodoApp"
 
 [Projects]
 WordUI = {Path = "."}
+WordUISDL = {Path = "backends/SDL"}
+WordUIRaylib = {Path = "backends/Raylib"}
 SDL3_ttf-Beef = {Git = "https://github.com/SedulousWorks/SDL3_ttf-Beef"}
 SDL3-Beef = {Git = "https://github.com/SedulousWorks/SDL3-Beef"}
 TodoApp = {Path = "example/TodoApp"}
+raylib-beef = {Path = "libs/raylib-beef/raylib-beef"}

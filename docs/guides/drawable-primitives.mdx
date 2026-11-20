@@ -5,8 +5,8 @@ description: Tier 3 — a Component with Measure/Draw overrides for custom rende
 
 For custom rendering, subclass `Component` and override its virtual hooks. This is the rare
 case; most widgets are factored words (Tier 1), not new drawable primitives. The goal is to
-provide an escape hatch for pixel-level drawing without forcing every widget author to learn
-a renderer abstraction.
+provide an escape hatch for custom drawing while keeping component code on the shared
+`IPainter` contract.
 
 ## The Component hooks
 
@@ -17,9 +17,9 @@ public abstract class Component
 {
     public virtual void Describe(String str) { }
     public virtual Size Measure(Size constraint) { ... }
-    public virtual void DrawBackground(Painter painter, Widget widget, Rect rect) { }
-    public virtual void DrawContent(Painter painter, Widget widget, Rect rect) { }
-    public virtual void DrawOverlay(Painter painter, Widget widget, Rect rect) { }
+    public virtual void DrawBackground(IPainter painter, Widget widget, Rect rect) { }
+    public virtual void DrawContent(IPainter painter, Widget widget, Rect rect) { }
+    public virtual void DrawOverlay(IPainter painter, Widget widget, Rect rect) { }
 }
 ```
 
@@ -31,7 +31,7 @@ public abstract class Component
 | `DrawContent` | Paint pass (z-order: middle) | Text, custom drawing |
 | `DrawOverlay` | Paint pass (z-order: front) | Borders, debug overlays |
 
-Note that `Measure` and the `Draw*` hooks receive the `Widget` in addition to `Painter` and
+Note that `Measure` and the `Draw*` hooks receive the `Widget` in addition to `IPainter` and
 `Rect` — this lets your component query the widget's Property bag for styling data (e.g.
 `TextComponent` reads `TextStyleProperty` for color).
 
@@ -42,7 +42,7 @@ public class FilledRect : Component
 {
     public Color FillColor = .White;
 
-    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+    public override void DrawBackground(IPainter painter, Widget widget, Rect bounds)
     {
         painter.FillRect(bounds, FillColor);
     }
@@ -76,13 +76,13 @@ public class ProgressBar : Component
     public Color FillColor = .Blue;
     public Color TrackColor = .(60, 60, 60, 255);
 
-    public override void DrawBackground(Painter painter, Widget widget, Rect bounds)
+    public override void DrawBackground(IPainter painter, Widget widget, Rect bounds)
     {
         // Track (full width, grey)
         painter.FillRoundRect(bounds, 4, TrackColor);
     }
 
-    public override void DrawOverlay(Painter painter, Widget widget, Rect bounds)
+    public override void DrawOverlay(IPainter painter, Widget widget, Rect bounds)
     {
         // Fill (proportional width, colored)
         float fillWidth = bounds.Width * Progress;
@@ -120,7 +120,7 @@ Your `Component` can read the widget's Property bag for styling data. The framew
 `TextComponent` does this:
 
 ```beef
-public override void DrawContent(Painter painter, Widget widget, Rect bounds)
+public override void DrawContent(IPainter painter, Widget widget, Rect bounds)
 {
     var ts = widget.GetProperty<TextStyleProperty>();
     Color color = ts != null ? ts.TextColor : .Black;
@@ -132,9 +132,10 @@ This pattern lets your drawable primitive respect modifier words: a user who wri
 `ProgressBar(0.5f); TextColor(.Green);` gets a green progress bar if your `DrawOverlay`
 reads `TextStyleProperty` for its fill color.
 
-## The Painter API
+## The IPainter API
 
-The `Painter` class (in `src/Core/Painter.bf`) wraps SDL3 rendering:
+The `IPainter` contract (in `src/Core/IPainter.bf`) is implemented by the SDL and Raylib
+backends:
 
 | Method | Description |
 |---|---|
@@ -145,9 +146,9 @@ The `Painter` class (in `src/Core/Painter.bf`) wraps SDL3 rendering:
 | `DrawText(StringView, float x, float y, Color)` | Render text (uses active TTF font) |
 | `MeasureText(StringView)` | Get pixel size of text |
 
-Currently, `Painter` is a concrete class over SDL3 with no abstraction. Direct access is fine
-for experiments; the eventual renderer abstraction will extract a common interface from
-working code.
+Components receive only this backend-neutral contract. Text drawing and measurement use
+the active backend's font service; backend-specific font or renderer types do not enter
+component implementations.
 
 ## When to use Tier 3
 

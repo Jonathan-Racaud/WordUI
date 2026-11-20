@@ -105,7 +105,7 @@ widget, `DragHandlerBehavior` begins a **pointer capture** in the persistent sto
 delta since the last move — even when the pointer leaves the widget's rect. Release ends the
 capture.
 
-The visual follows via a render-time offset applied in `SDLApp.DrawWidget` — no relayout, no
+The visual follows via a render-time offset applied in `App.DrawWidget` — no relayout, no
 rebuild — so a lightweight drag (that doesn't reflow siblings) needn't call `Invalidate()`
 at all. See the [Interaction Pipeline](/concepts/interaction-pipeline) for capture and the
 reflow seam.
@@ -166,8 +166,8 @@ focusable; focus is managed independently by `FocusHandler`.
 public delegate void KeyHandler(int keycode, int modifiers);
 ```
 
-- `keycode` — SDL keycode (platform-independent virtual key)
-- `modifiers` — bitmask of SDL keymods (Shift, Ctrl, Alt, etc.)
+- `keycode` — shared `KeyCode` value (cast to `int` for comparisons)
+- `modifiers` — bitmask of `KeyModifier` values (`Shift`, `Control`, `Alt`, `Super`)
 
 ## Focusable
 

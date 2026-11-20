@@ -1,5 +1,4 @@
 using System;
-using SDL3_ttf;
 
 namespace WordUI;
 
@@ -17,17 +16,13 @@ public class TextComponent : Component
 
 	public override Size Measure(Size constraint)
 	{
-		let font = SDLApp.sDefaultFont;
-		if (font == null || Content == null)
+		let painter = App.Instance != null ? App.Instance.Painter : null;
+		if (painter == null || Content == null)
 			return .(0, 0);
-
-		let cStr = Content.CStr();
-		int32 w = 0, h = 0;
-		TTF_GetStringSize(font, cStr, 0, &w, &h);
-		return .((float)w, (float)h);
+		return painter.MeasureText(Content);
 	}
 
-	public override void DrawContent(Painter painter, Widget widget, Rect bounds)
+	public override void DrawContent(IPainter painter, Widget widget, Rect bounds)
 	{
 		if (Content == null)
 			return;

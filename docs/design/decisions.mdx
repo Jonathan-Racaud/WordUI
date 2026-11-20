@@ -88,19 +88,15 @@ hooks, no registration.
 
 ---
 
-## 6. Direct SDL3 now; renderer/platform abstraction deferred
+## 6. Backend-neutral UI core; platform and drawing services live at the edge
 
-The framework uses SDL3 directly while the concatenative model is being validated — this is
-purely about testing the thesis first and extracting the abstraction later. Drawing
-flows through one concrete `Painter` module; `SDL_Event` is adapted to `InputEvent` at a
-single boundary.
-
-**Why:** The thesis under test is "can concatenative-style UI work for real apps?"; answered
-entirely on the framework side (words, layout, composition), where the backend's identity is
-irrelevant. A one-implementation abstraction is best **extracted** from working code later
-than **designed** blind now. The localization discipline (single `Painter` class, single
-event-adapter boundary) makes the eventual extraction a mechanical refactor rather than a
-rewrite.
+`App` owns build, layout, input dispatch, and widget traversal independently of a window
+library. Components draw through `IPainter`; backend adapters provide drawing and text
+measurement and translate native input into WordUI events. `SDLApp` remains a standalone
+SDL host with its own event loop, while `RaylibBackend` is driven by the host application's
+existing Raylib window and frame loop. The UI core does not create, close, or own a backend
+window. New renderers should implement the same drawing contract and forward normalized
+input through `App.ProcessInput` and `App.ProcessMotion`.
 
 ---
 

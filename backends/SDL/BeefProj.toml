@@ -1,0 +1,14 @@
+FileVersion = 1
+
+[Project]
+Name = "WordUISDL"
+TargetType = "BeefLib"
+
+[Dependencies]
+corlib = "*"
+WordUI = "*"
+SDL3_ttf-Beef = "*"
+SDL3-Beef = "*"
+
+[Configs.Debug.Linux64]
+OtherLinkFlags = "$(LinkFlags) -lSDL3 -lSDL3_ttf"

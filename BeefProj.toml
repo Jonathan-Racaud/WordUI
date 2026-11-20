@@ -7,8 +7,3 @@ StartupObject = "WordUI.Program"
 
 [Dependencies]
 corlib = "*"
-SDL3_ttf-Beef = {Git = "https://github.com/SedulousWorks/SDL3_ttf-Beef"}
-SDL3-Beef = {Git = "https://github.com/SedulousWorks/SDL3-Beef"}
-
-[Configs.Debug.Linux64]
-OtherLinkFlags = "$(LinkFlags) -lSDL3 -lSDL3_ttf"

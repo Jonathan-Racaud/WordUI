@@ -236,8 +236,7 @@ public class Node
 	}
 
 	// True while any registered tickable in this subtree still needs updates.
-	// Drives the event loop: when false (and no drag is active), the loop can
-	// block in SDL_WaitEvent instead of spinning a frame clock.
+	// Drives the host to request another frame while time-based state is active.
 	public bool HasActiveTicks
 	{
 		get

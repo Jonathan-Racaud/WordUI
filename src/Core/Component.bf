@@ -32,17 +32,17 @@ public abstract class Component
 	}
 
 	// Fills behind content and children. Default: no-op.
-	public virtual void DrawBackground(Painter painter, Widget widget, Rect bounds)
+	public virtual void DrawBackground(IPainter painter, Widget widget, Rect bounds)
 	{
 	}
 
 	// Draws the widget's own content (text, custom shapes). Default: no-op.
-	public virtual void DrawContent(Painter painter, Widget widget, Rect bounds)
+	public virtual void DrawContent(IPainter painter, Widget widget, Rect bounds)
 	{
 	}
 
 	// Strokes on top of content and children. Default: no-op.
-	public virtual void DrawOverlay(Painter painter, Widget widget, Rect bounds)
+	public virtual void DrawOverlay(IPainter painter, Widget widget, Rect bounds)
 	{
 	}
 }

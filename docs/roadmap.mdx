@@ -19,14 +19,14 @@ build on an unproven foundation.
 | **M3** — Interaction states | ✅ Complete | Cross-axis alignment (`Center`, `AlignStart`, `AlignEnd`, `AlignStretch`), sizing constraints (`Width`, `Height`, `FixedSize` with `SizingConstraints`), and a draw-time-resolved interaction pipeline: `IfActive<T>` / `IfPressed` / `IfHover` record field-level `StatePatch` deltas blended at draw, a persistent state store keyed by `StableKey`, `Transition` animation with easing curves, `OnDrag` with pointer capture, and the **repaint-vs-rebuild split** (idle blocks in `SDL_WaitEvent`, ticks at ~60fps only while animating/dragging). Exit met: buttons highlight on hover with no rebuild; ~0% idle CPU. |
 | **M4** — Persistent state: scroll | ✅ Complete | Building on M3's rebuild-surviving identity (`KeyAssign` → `StableKey` + retained `Node` tree): a `Scrollable` container primitive carrying a `ScrollView` marker, `Clip()` and `Vertical`/`Horizontal` as composable modifiers, mouse-wheel events dispatched by `ScrollHandlerBehavior` to the nearest scrollable under the pointer, a persistent per-key scroll offset applied as a render-time translation (no relayout), `Painter` clip stack over `SDL_SetRenderClipRect`, `OnScroll` handler, and orphan eviction in `ReconcileTree()`. Exit met: a Todo app adds/removes items and scrolls a clipped list whose position survives the rebuild. |
 | **M5** — Text input, focus, keyboard | 🟡 Partial | Focus routing, keyboard events, `Focusable`/`OnKey` handler words complete (focus state stored in `StateSlots.Focus` slot 5, dispatched via `InputDispatcher` to `KeyboardHandler`). TextField widget (caret, editing) is upcoming. Exit: type into and edit a text field. |
+| **M6** — Backend separation | 🟡 Implemented; validation pending | `App` owns shared build/layout/input/draw traversal; components draw through `IPainter`; SDL remains a standalone host; `RaylibBackend` uses a host-owned Raylib window and frame loop, including normalized input and backend-owned text services. |
 
 ## Earmarked (post-M5)
 
 Memoization (only if profiled slow) · `Model<T>` observables + `Bind` ·
 Live-reflow drag / layout-affecting animation (behind the M3 drag-offset seam) ·
 Image/asset pipeline · Complex-object primitives · Accessibility ·
-**Renderer/platform abstraction + alternate backend** (extracted from concrete `Painter`
-once the concatenative model is proven).
+additional drawing backends implementing `IPainter`.
 
 Delivered ahead of schedule in M3: basic **animation** (`Transition` + easing) and a
 **drag protocol** (`OnDrag` + pointer capture), both previously earmarked here.
