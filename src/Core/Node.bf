@@ -63,6 +63,8 @@ public class Node
 	// Prevents double-firing OnCreate when a slot is live across multiple
 	// reconciliations.
 	HashSet<int> mInitializedSlots = new .() ~ delete _;
+	bool mDisposing;
+	bool mDisposed;
 
 	// ---- Invalidation flags ----
 	// Per-node dirty tracking for partial invalidation. When a capability writes
@@ -86,6 +88,7 @@ public class Node
 	{
 		get
 		{
+			Runtime.Assert(!mDisposing && !mDisposed, "Cannot access a disposed Node's RenderNode");
 			if (mRenderNode == null)
 				mRenderNode = new RenderNode(this);
 			return mRenderNode;
@@ -97,17 +100,67 @@ public class Node
 		StableKey = key;
 	}
 
+	public ~this()
+	{
+		Dispose();
+	}
+
 	// ---- State access ----
 
 	// Raw access: capability defines its own slot constant and value type.
+	// Ownership of an owned Variant is transferred to the Node.
 	public void SetState(int slot, Variant value)
 	{
+		Runtime.Assert(!mDisposing && !mDisposed, "Cannot set state on a disposed Node");
+		Variant existing;
+		if (mState.TryGetValue(slot, out existing))
+		{
+			if (OwnsSameStorage(existing, value))
+				return;
+			existing.Dispose();
+		}
 		mState[slot] = value;
 	}
 
+	// Reuses an existing Variant's storage when the slot already has this type,
+	// avoiding per-update heap allocation for larger value types.
+	public void SetState<T>(int slot, T value) where T : struct
+	{
+		Runtime.Assert(!mDisposing && !mDisposed, "Cannot set state on a disposed Node");
+		int* key;
+		Variant* existing;
+		if (mState.TryGetRef(slot, out key, out existing) &&
+			existing.VariantType == typeof(T) &&
+			existing.OwnsMemory &&
+			!existing.IsObject)
+		{
+			*(T*)existing.DataPtr = value;
+			return;
+		}
+		SetState(slot, Variant.Create(value));
+	}
+
+	// Returns a borrowed view; callers must not retain it past a state mutation
+	// or dispose it. Typed accessors copy values out immediately.
 	public Variant GetState(int slot)
 	{
-		return mState.GetValueOrDefault(slot);
+		var value = mState.GetValueOrDefault(slot);
+		if (!value.OwnsMemory)
+			return value;
+		if (value.IsObject)
+			return Variant.Create(value.Get<Object>());
+		return Variant.CreateReference(value.VariantType, value.DataPtr);
+	}
+
+	static bool OwnsSameStorage(Variant existing, Variant incoming)
+	{
+		if (!existing.OwnsMemory || existing.VariantType != incoming.VariantType)
+			return false;
+		if (existing.IsObject)
+			return incoming.IsObject && existing.Get<Object>() == incoming.Get<Object>();
+		var existingValue = existing;
+		var incomingValue = incoming;
+		return !incoming.IsObject && existingValue.DataPtr == incomingValue.DataPtr;
 	}
 
 	// Typed conveniences for the 90% case (zero-allocation Variant path).
@@ -122,7 +175,7 @@ public class Node
 
 	public void SetBool(int slot, bool value)
 	{
-		SetState(slot, Variant.Create(value));
+		SetState(slot, value);
 	}
 
 	public float GetFloat(int slot, float defaultValue = 0f)
@@ -135,7 +188,7 @@ public class Node
 
 	public void SetFloat(int slot, float value)
 	{
-		SetState(slot, Variant.Create(value));
+		SetState(slot, value);
 	}
 
 	public int GetInt(int slot, int defaultValue = 0)
@@ -148,7 +201,7 @@ public class Node
 
 	public void SetInt(int slot, int value)
 	{
-		SetState(slot, Variant.Create(value));
+		SetState(slot, value);
 	}
 
 	// ---- Layout invalidation ----
@@ -260,20 +313,35 @@ public class Node
 	// doesn't grow unboundedly.
 	public void PruneState(HashSet<int> liveSlots)
 	{
-		List<int> dead = scope .();
+		HashSet<int> dead = scope .();
 		for (let pair in mState)
 		{
 			if (!liveSlots.Contains(pair.key))
 				dead.Add(pair.key);
 		}
+		for (let slot in mInitializedSlots)
+		{
+			if (!liveSlots.Contains(slot))
+				dead.Add(slot);
+		}
 		for (let k in dead)
 		{
-			// Fire OnCleanup so the capability can read its data one last time
-			// and release any external resources before the slot is removed.
+			// Fire OnCleanup even when a capability did not store a value in its slot.
 			let lc = StateSlotRegistry.Get(k);
 			if (lc.OnCleanup != null)
 				lc.OnCleanup(this, k);
-			mState.Remove(k);
+			RemoveStateValue(k);
+			mInitializedSlots.Remove(k);
+		}
+	}
+
+	void RemoveStateValue(int slot)
+	{
+		Variant value;
+		if (mState.TryGetValue(slot, out value))
+		{
+			value.Dispose();
+			mState.Remove(slot);
 		}
 	}
 
@@ -319,17 +387,14 @@ public class Node
 
 	// ---- Lifecycle ----
 
-	// Dispose this node's own resources. Snapshot-deletes all registered
-	// tickables (each destructor unregisters itself), then fires OnDispose for
-	// every state slot still holding data so capabilities can release external
-	// resources (timers, native handles, subscriptions). Finally disposes the
-	// retained RenderNode. Children are NOT recursively disposed here: the
-	// orphan loop in App.ReconcileTree disposes every orphaned Node individually.
-	// A reused child is reattached via ReconcileWidget, which calls
-	// Children.Clear() first to drop the old reference. Recursing here would
-	// double-free orphaned children.
+	// Dispose this node's own resources. Child nodes are disposed separately by
+	// the owning App; clearing child references here prevents recursive deletion.
 	public void Dispose()
 	{
+		if (mDisposed || mDisposing)
+			return;
+		mDisposing = true;
+
 		// Delete tickables first (each destructor unregisters from mTickables).
 		// Snapshot so the list isn't mutated under iteration.
 		List<ITickable> snapshot = scope .();
@@ -339,13 +404,27 @@ public class Node
 			delete t;
 		mTickables.Clear();
 
-		// Fire OnDispose for every slot that still has data in this node.
+		// Fire OnDispose for initialized slots, including capabilities whose
+		// OnCreate did not need to store a value in mState.
+		HashSet<int> slots = scope .();
+		for (let slot in mInitializedSlots)
+			slots.Add(slot);
+		for (let pair in mState)
+			slots.Add(pair.key);
+		for (let slot in slots)
+		{
+			let lc = StateSlotRegistry.Get(slot);
+			if (lc.OnDispose != null)
+				lc.OnDispose(this, slot);
+		}
+
 		for (let pair in mState)
 		{
-			let lc = StateSlotRegistry.Get(pair.key);
-			if (lc.OnDispose != null)
-				lc.OnDispose(this, pair.key);
+			var value = pair.value;
+			value.Dispose();
 		}
+		mState.Clear();
+		mInitializedSlots.Clear();
 
 		// Dispose the retained RenderNode (layout geometry, resource cache).
 		if (mRenderNode != null)
@@ -356,6 +435,9 @@ public class Node
 		}
 
 		Children.Clear();
+		Parent = null;
+		mDisposed = true;
+		mDisposing = false;
 	}
 
 	// Add a child, setting its parent link.

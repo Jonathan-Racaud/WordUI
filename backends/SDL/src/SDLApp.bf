@@ -39,6 +39,7 @@ public abstract class SDLApp : App
 
 	public ~this()
 	{
+		Dispose();
 		if (App.Instance == this)
 			App.Instance = null;
 		Painter = null;

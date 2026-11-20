@@ -7,4 +7,5 @@ StartupObject = "TodoApp.Program"
 [Dependencies]
 corlib = "*"
 WordUI = "*"
-WordUISDL = "*"
+raylib-beef = "*"
+WordUIRaylib = "*"

@@ -39,11 +39,11 @@ public struct StateSlot<T> where T : struct
 		return val;
 	}
 
-	// Writes the slot value into a retained Node. The value is stored inline
-	// in the Variant with zero allocation (T : struct).
+	// Writes the slot value into a retained Node. Small values are stored inline;
+	// larger values reuse their existing Variant storage when updated.
 	public void Set(Node node, T value)
 	{
-		node.SetState(Id, Variant.Create(value));
+		node.SetState(Id, value);
 	}
 }
 

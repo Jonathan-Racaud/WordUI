@@ -47,14 +47,115 @@ class Program
 			return RunApp(scope UnclosedPenApp());
 		if (args.Count > 0 && args[0] == "--test-leftover")
 			return RunApp(scope LeftoverApp());
+		if (args.Count > 0 && args[0] == "--test-resource-lifecycle")
+			return TestResourceLifecycle();
 
 		return 0;
+	}
+
+	static int TestResourceLifecycle()
+	{
+		LifecycleResourceProbe.DisposeCount = 0;
+		LifecycleResourceProbe.DeleteCount = 0;
+		LifecycleStateProbe.DeleteCount = 0;
+
+		let app = scope ResourceLifecycleApp();
+		app.RebuildIfNeeded();
+		let node = app.TestRoot;
+
+		node.RenderNode.SetResource<TextComponent>(new LifecycleResourceProbe());
+		node.RenderNode.SetResource<TextComponent>(new LifecycleResourceProbe());
+		if (LifecycleResourceProbe.DisposeCount != 1 || LifecycleResourceProbe.DeleteCount != 1)
+			return ResourceTestFailure("resource replacement did not release the previous resource");
+
+		node.RenderNode.RemoveResource<TextComponent>();
+		if (LifecycleResourceProbe.DisposeCount != 2 || LifecycleResourceProbe.DeleteCount != 2)
+			return ResourceTestFailure("resource removal did not release the resource");
+
+		node.RenderNode.SetResource<TextComponent>(new LifecycleResourceProbe());
+		node.SetState(100, Variant.Create(new LifecycleStateProbe(), true));
+		node.SetState(100, Variant.Create(new LifecycleStateProbe(), true));
+		if (LifecycleStateProbe.DeleteCount != 1)
+			return ResourceTestFailure("state replacement did not dispose the previous value");
+
+		var borrowed = node.GetState(100);
+		borrowed.Dispose();
+		if (LifecycleStateProbe.DeleteCount != 1)
+			return ResourceTestFailure("disposing a borrowed state value released its owner");
+
+		node.PruneState(scope .());
+		if (LifecycleStateProbe.DeleteCount != 2)
+			return ResourceTestFailure("state pruning did not dispose the removed value");
+
+		node.SetState(101, Variant.Create(new LifecycleStateProbe(), true));
+		for (int i = 0; i < 1000; i++)
+			StateSlots.DragOffset.Set(node, .() { X = (float)i, Y = (float)-i });
+		let dragOffset = StateSlots.DragOffset.Get(node);
+		if (dragOffset.X != 999 || dragOffset.Y != -999)
+			return ResourceTestFailure("large typed state did not retain the latest value");
+
+		app.Dispose();
+		app.Dispose();
+		if (LifecycleResourceProbe.DisposeCount != 3 || LifecycleResourceProbe.DeleteCount != 3)
+			return ResourceTestFailure("app disposal did not release its retained render resource exactly once");
+		if (LifecycleStateProbe.DeleteCount != 3)
+			return ResourceTestFailure("app disposal did not release its remaining state value");
+		if (app.TestRoot != null)
+			return ResourceTestFailure("app disposal retained its root node");
+
+		Console.WriteLine("Resource lifecycle test passed.");
+		return 0;
+	}
+
+	static int ResourceTestFailure(StringView message)
+	{
+		Console.WriteLine(scope $"Resource lifecycle test failed: {message}");
+		return 1;
 	}
 
 	static int RunApp(App app)
 	{
 		app.RebuildIfNeeded();
 		return 0;
+	}
+}
+
+class ResourceLifecycleApp : App
+{
+	public Node TestRoot => mRootNode;
+
+	protected override void Build()
+	{
+		VStack(scope () => {
+			Label("resource lifecycle");
+			Button("test");
+		});
+	}
+}
+
+class LifecycleResourceProbe : RenderResource
+{
+	public static int DisposeCount;
+	public static int DeleteCount;
+
+	public override void Dispose()
+	{
+		DisposeCount++;
+	}
+
+	public ~this()
+	{
+		DeleteCount++;
+	}
+}
+
+class LifecycleStateProbe
+{
+	public static int DeleteCount;
+
+	public ~this()
+	{
+		DeleteCount++;
 	}
 }
 

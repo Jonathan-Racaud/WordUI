@@ -25,7 +25,7 @@ public class RaylibBackend
 
 	public ~this()
 	{
-		if (mApp != null)
+		if (mApp != null && mApp.Painter == mPainter)
 			mApp.Painter = null;
 	}
 

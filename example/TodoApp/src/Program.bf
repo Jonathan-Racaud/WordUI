@@ -2,47 +2,18 @@ using System;
 using System.Collections;
 
 using WordUI;
-using static WordUI.Words;
+using static WordUI.UI;
+
+using RaylibBeef;
+using static RaylibBeef.Raylib;
 
 namespace TodoApp;
-
-extension UI
-{
-
-}
-
-// Factored words: indistinguishable from framework words at the call site.
-static class Words
-{
-	public static void TitleLabel(StringView text)
-	{
-		Label(text); FontSize(24); TextColor(.White);
-	}
-
-	// A todo list row, built concatenatively from smaller words — an HStack of a
-	// label, a spacer, and a delete button. This is the "ListView item" of the
-	// milestone: a complex widget composed from basic words, no Widget subclass.
-	// `id` gives the row a stable identity so removing a row above it doesn't
-	// shift its retained interaction state.
-	public static void TodoRow(int id, StringView text, ClickHandler onDelete)
-	{
-		HStack(scope () => {
-			Label(text); AlignStart(); TextColor(.White);
-			Spacer();
-			Button("x"); {
-				TextColor(.White);
-				IfPressed(scope () => { Fill(.(120, 120, 120, 255)); });
-				OnClick(onDelete);
-			}
-		}); Key(id); Spacing(8);
-	}
-}
 
 // M4 demo: a functional todo app — add an item, remove an item, and scroll the
 // list. The list lives in a Scrollable container with a bounded height and Clip,
 // so it overflows into a scroll viewport whose offset survives the rebuild each
 // add/remove triggers. No text input yet (M5), so item text is auto-generated.
-class TodoSDLApp : SDLApp
+class TodoApp: App
 {
 	// App-owned state: id keeps a stable identity per item as the list churns.
 	List<(int id, String text)> mTodos = new .() ~ {
@@ -53,9 +24,32 @@ class TodoSDLApp : SDLApp
 
 	public this()
 	{
-		ClearColor = .(20, 40, 60, 255);
+		InitWindow(1024, 768, "Todo");
+
 		for (int i = 0; i < 8; i++)
 			AddTodo();
+	}
+
+	public ~this()
+	{
+		Dispose();
+		CloseWindow();
+	}
+
+	public void Run()
+	{
+		let ui = scope RaylibBackend(this, GetFontDefault());
+
+		while (!WindowShouldClose())
+		{
+			ui.Update();
+
+			BeginDrawing();
+
+			ui.Draw();
+
+			EndDrawing();
+		}
 	}
 
 	void AddTodo()
@@ -105,13 +99,36 @@ class TodoSDLApp : SDLApp
 			}); Height(.Fixed(240)); Spacing(6); Clip();
 		}); Padding(16);
 	}
+
+	public static void TitleLabel(StringView text)
+	{
+		Label(text); FontSize(24); TextColor(.White);
+	}
+
+	// A todo list row, built concatenatively from smaller words — an HStack of a
+	// label, a spacer, and a delete button. This is the "ListView item" of the
+	// milestone: a complex widget composed from basic words, no Widget subclass.
+	// `id` gives the row a stable identity so removing a row above it doesn't
+	// shift its retained interaction state.
+	public static void TodoRow(int id, StringView text, ClickHandler onDelete)
+	{
+		HStack(scope () => {
+			Label(text); AlignStart(); TextColor(.White);
+			Spacer();
+			Button("x"); {
+				TextColor(.White);
+				IfPressed(scope () => { Fill(.(120, 120, 120, 255)); });
+				OnClick(onDelete);
+			}
+		}); Key(id); Spacing(8);
+	}
 }
 
 class Program
 {
 	public static int Main(String[] args)
 	{
-		let app = scope TodoSDLApp();
+		let app = scope TodoApp();
 		app.Run();
 		return 0;
 	}

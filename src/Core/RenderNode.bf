@@ -33,16 +33,19 @@ public class RenderNode
 	// during MarkNeedsPaint().
 	Node mOwner;
 
-	// Per-component-type retained render resource cache. Components store
-	// render resources here keyed by their own concrete type (e.g. a future
-	// TextComponent might store a cached texture id under typeof(TextComponent)).
-	// Variant stores small value types inline with zero allocation; heap objects
-	// stored via Variant.CreateBoxed are owned here and freed on dispose.
-	Dictionary<Type, Variant> mResources = new .() ~ delete _;
+	// Each entry owns one resource wrapper and disposes it when replaced,
+	// removed, or when this RenderNode is disposed.
+	Dictionary<Type, RenderResource> mResources = new .() ~ delete _;
+	bool mDisposed;
 
 	public this(Node owner)
 	{
 		mOwner = owner;
+	}
+
+	public ~this()
+	{
+		Dispose();
 	}
 
 	// True while this node or any descendant needs paint.
@@ -104,25 +107,57 @@ public class RenderNode
 
 	// ---- Resource cache ----
 
-	// Retrieve a retained render resource stored by a component of type T.
-	// Returns default(Variant) (empty) if nothing has been stored.
-	public Variant GetResource<T>() where T : Component
+	// Retrieve the retained resource owned on behalf of component T.
+	public TResource GetResource<TComponent, TResource>()
+		where TComponent : Component
+		where TResource : RenderResource
 	{
-		return mResources.GetValueOrDefault(typeof(T));
+		RenderResource resource;
+		if (!mDisposed && mResources.TryGetValue(typeof(TComponent), out resource))
+			return resource as TResource;
+		return null;
 	}
 
-	// Store a retained render resource for a component of type T. Overwrites
-	// any previous value. The resource lives as long as this RenderNode exists
-	// (i.e. across rebuilds, until the Node is disposed).
-	public void SetResource<T>(Variant value) where T : Component
+	// Transfers ownership of a heap-allocated resource to this RenderNode.
+	// Each resource may be stored in only one cache slot.
+	public void SetResource<TComponent>(RenderResource resource) where TComponent : Component
 	{
-		mResources[typeof(T)] = value;
+		Runtime.Assert(!mDisposed, "Cannot set a resource on a disposed RenderNode");
+		Runtime.Assert(resource != null, "Cannot set a null RenderNode resource");
+
+		let key = typeof(TComponent);
+		RenderResource existing;
+		if (mResources.TryGetValue(key, out existing) && existing == resource)
+			return;
+
+		for (let pair in mResources)
+			Runtime.Assert(pair.value != resource, "A RenderNode resource can only be owned by one cache slot");
+
+		resource.Claim(this);
+		if (mResources.TryGetValue(key, out existing))
+		{
+			mResources.Remove(key);
+			ReleaseResource(existing);
+		}
+		mResources[key] = resource;
 	}
 
-	// Remove and return the cached resource for T, if any.
-	public void RemoveResource<T>() where T : Component
+	// Removes and disposes the retained resource for component T, if present.
+	public void RemoveResource<TComponent>() where TComponent : Component
 	{
-		mResources.Remove(typeof(T));
+		RenderResource resource;
+		if (mResources.TryGetValue(typeof(TComponent), out resource))
+		{
+			mResources.Remove(typeof(TComponent));
+			ReleaseResource(resource);
+		}
+	}
+
+	void ReleaseResource(RenderResource resource)
+	{
+		resource.Release(this);
+		resource.Dispose();
+		delete resource;
 	}
 
 	// ---- Lifecycle ----
@@ -131,12 +166,16 @@ public class RenderNode
 	// Node is destroyed (orphaned by reconciliation).
 	public void Dispose()
 	{
-		// Variant values that are small value types (int, float, bool) are
-		// stored inline and need no cleanup. Boxed heap objects stored via
-		// Variant.CreateBoxed would need explicit deletion, but no component
-		// currently uses that path. If a future component stores heap resources,
-		// it should hook into the owning Node's state lifecycle for cleanup.
+		if (mDisposed)
+			return;
+		mDisposed = true;
+
+		List<RenderResource> resources = scope .();
+		for (let pair in mResources)
+			resources.Add(pair.value);
 		mResources.Clear();
+		for (let resource in resources)
+			ReleaseResource(resource);
 		mOwner = null;
 	}
 }

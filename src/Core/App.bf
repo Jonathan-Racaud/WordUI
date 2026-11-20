@@ -29,6 +29,7 @@ public abstract class App
 	bool mDirty = true;
 	bool mNeedsRepaint = false;
 	bool mNeedsLayout = false;
+	bool mDisposed;
 	public IPainter Painter { get; set; }
 
 	// ---- Retained runtime: the Node tree ----
@@ -94,8 +95,55 @@ public abstract class App
 		RegisterTracker(new InputDispatcher());
 	}
 
+	public ~this()
+	{
+		Dispose();
+	}
+
+	// Releases the build arena, handlers, trackers, and the complete retained
+	// Node graph. Call before shutting down a renderer if node resources use it.
+	// Safe to call more than once.
+	public void Dispose()
+	{
+		if (mDisposed)
+			return;
+		mDisposed = true;
+
+		List<Node> nodes = scope .();
+		for (let pair in mNodeIndex)
+			nodes.Add(pair.value);
+
+		// Keep the index and active backend available while lifecycle/resource
+		// cleanup callbacks run. Dispose nodes before deleting any node object.
+		for (let node in nodes)
+			node.Dispose();
+
+		DeleteAndNullify!(mArena);
+		mRoot = null;
+		ClearHandlers();
+
+		for (let tracker in mTrackers)
+			delete tracker;
+		mTrackers.Clear();
+
+		mNodeIndex.Clear();
+		for (let node in nodes)
+			delete node;
+		mRootNode = null;
+		Painter = null;
+		mCapture = .();
+		FocusedKey = 0;
+		mNeedsRepaint = false;
+		mNeedsLayout = false;
+		mDirty = false;
+
+		if (App.Instance == this)
+			App.Instance = null;
+	}
+
 	public void RegisterTracker(ITracker t)
 	{
+		Runtime.Assert(!mDisposed, "Cannot register a tracker on a disposed App");
 		mTrackers.Add(t);
 	}
 
@@ -118,6 +166,8 @@ public abstract class App
 	// Returns true when the host should render a frame.
 	public bool UpdateFrame(Rect available, int nowMs)
 	{
+		if (mDisposed)
+			return false;
 		TickAll(nowMs);
 		if (RebuildIfNeeded())
 		{
@@ -285,6 +335,8 @@ public abstract class App
 	// Returns true if a rebuild happened.
 	public bool RebuildIfNeeded()
 	{
+		if (mDisposed)
+			return false;
 		if (!mDirty)
 			return false;
 

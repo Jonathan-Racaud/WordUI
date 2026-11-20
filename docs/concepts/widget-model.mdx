@@ -32,6 +32,18 @@ bags let each subsystem iterate exactly what it needs: the draw loop iterates Co
 only; layout queries both Components and Properties; input dispatch iterates Behaviors.
 The tree dump iterates all three.
 
+## Retained render resources
+
+The retained `Node` tree has one lazily created `RenderNode` per widget identity.
+Components can associate a backend resource with their component type using
+`RenderNode.SetResource<TComponent>(resource)`. The resource must derive from
+`RenderResource`; setting it transfers ownership to that `RenderNode`. Replacing,
+removing, or disposing the node calls `Dispose()` and deletes the resource wrapper.
+
+Call `App.Dispose()` before closing a backend window or graphics context so retained
+resources can release backend handles while the backend is still available. `App.Dispose()`
+is idempotent and is also called by the App destructor.
+
 ## Component
 
 `Component` is an `abstract class` and the **single inheritance point** in the framework, one
